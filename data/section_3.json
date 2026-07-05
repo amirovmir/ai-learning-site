@@ -1,0 +1,384 @@
+{
+  "phase": "Phase 1 — Python + Math + Data",
+  "section": "📊 EDA и визуализация",
+  "topics": [
+    {
+      "title": "Процесс EDA: с чего начать анализ данных",
+      "level": "🟢 Junior",
+      "explanation": "<p>EDA (Exploratory Data Analysis) — это первый и обязательный шаг перед моделированием. Цель — понять структуру данных, найти аномалии и сформировать гипотезы до того, как вы напишете хоть одну строку кода модели.</p><ul><li>Смотрим размер датасета, типы колонок, пропуски: <code>df.info()</code>, <code>df.describe()</code></li><li>Проверяем дубликаты: <code>df.duplicated().sum()</code></li><li>Смотрим первые и случайные строки: <code>df.sample(10)</code>, а не только <code>df.head()</code> — head часто скрывает проблемы в хвосте данных</li></ul><pre><code>import pandas as pd\ndf = pd.read_csv('data.csv')\nprint(df.shape)\nprint(df.info())\nprint(df.isna().mean().sort_values(ascending=False))\n</code></pre><p>Типичная ошибка джуна — сразу лезть в построение модели, пропуская EDA. В продакшене 60-70% времени ML-инженера уходит именно на понимание и очистку данных. Совет: заведите чек-лист EDA и проходите его для каждого нового датасета — пропуски, дубликаты, типы, диапазоны значений, целевая переменная.</p>",
+      "links": [
+        {
+          "title": "Pandas: EDA basics",
+          "url": "https://pandas.pydata.org/docs/getting_started/index.html"
+        },
+        {
+          "title": "Pandas API reference",
+          "url": "https://pandas.pydata.org/docs/reference/index.html"
+        },
+        {
+          "title": "Exploratory Data Analysis — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Exploratory_data_analysis"
+        }
+      ]
+    },
+    {
+      "title": "Matplotlib: основы построения графиков",
+      "level": "🟢 Junior",
+      "explanation": "<p>Matplotlib — низкоуровневая, но самая гибкая библиотека визуализации в Python. Практически все остальные (seaborn, pandas.plot) построены поверх неё.</p><ul><li>Объектно-ориентированный API (<code>fig, ax = plt.subplots()</code>) предпочтительнее <code>plt.plot()</code> — легче управлять несколькими графиками</li><li>Всегда подписывайте оси и заголовок — график без подписей бесполезен для отчёта</li><li>Сохраняйте графики через <code>fig.savefig('plot.png', dpi=150, bbox_inches='tight')</code></li></ul><pre><code>import matplotlib.pyplot as plt\n\nfig, ax = plt.subplots(figsize=(8, 5))\nax.plot(df['date'], df['value'], label='revenue')\nax.set_xlabel('Дата')\nax.set_ylabel('Выручка')\nax.set_title('Динамика выручки')\nax.legend()\nplt.tight_layout()\nplt.show()\n</code></pre><p>Типичная ошибка — строить графики в дефолтном размере и с обрезанными подписями. Второй частый косяк: забывать <code>plt.close()</code> или <code>plt.clf()</code> в цикле, из-за чего графики накладываются друг на друга и течёт память в Jupyter.</p>",
+      "links": [
+        {
+          "title": "Matplotlib documentation",
+          "url": "https://matplotlib.org/stable/index.html"
+        },
+        {
+          "title": "Matplotlib tutorials",
+          "url": "https://matplotlib.org/stable/tutorials/index.html"
+        },
+        {
+          "title": "Matplotlib pyplot API",
+          "url": "https://matplotlib.org/stable/api/pyplot_summary.html"
+        }
+      ]
+    },
+    {
+      "title": "Seaborn: статистическая визуализация поверх pandas",
+      "level": "🟢 Junior",
+      "explanation": "<p>Seaborn упрощает построение статистических графиков и красиво работает напрямую с <code>DataFrame</code>, что экономит десятки строк matplotlib-кода.</p><ul><li><code>sns.histplot</code>, <code>sns.boxplot</code>, <code>sns.violinplot</code> — распределения</li><li><code>sns.heatmap</code> — матрицы корреляций</li><li><code>sns.pairplot</code> — быстрый обзор всех попарных зависимостей</li></ul><pre><code>import seaborn as sns\nimport matplotlib.pyplot as plt\n\nsns.set_theme(style='whitegrid')\nfig, ax = plt.subplots(figsize=(7,5))\nsns.boxplot(data=df, x='category', y='price', ax=ax)\nplt.xticks(rotation=45)\nplt.show()\n</code></pre><p>Совет из продакшена: <code>sns.pairplot</code> на датасете с 50+ колонками — плохая идея, он будет строить n² графиков и висеть минутами. Сначала отберите топ-10 признаков по корреляции с таргетом или важности, и уже на них стройте pairplot.</p><table><tr><th>Функция</th><th>Когда использовать</th></tr><tr><td>histplot</td><td>одна числовая переменная</td></tr><tr><td>boxplot</td><td>числовая vs категориальная</td></tr><tr><td>heatmap</td><td>корреляции между признаками</td></tr></table>",
+      "links": [
+        {
+          "title": "Seaborn documentation",
+          "url": "https://seaborn.pydata.org/"
+        },
+        {
+          "title": "Seaborn tutorial",
+          "url": "https://seaborn.pydata.org/tutorial.html"
+        },
+        {
+          "title": "Seaborn API reference",
+          "url": "https://seaborn.pydata.org/api.html"
+        }
+      ]
+    },
+    {
+      "title": "Распределения и выбросы (outliers)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Понимание формы распределения признака критично: многие модели (линейная регрессия, kNN, k-means) чувствительны к выбросам и скошенным распределениям.</p><ul><li>Гистограмма + KDE: <code>sns.histplot(df['x'], kde=True)</code></li><li>Boxplot для быстрого обнаружения выбросов по правилу IQR (1.5×IQR за пределы квартилей)</li><li>Z-score для нормальных распределений: <code>|z| &gt; 3</code> — потенциальный выброс</li></ul><pre><code>Q1 = df['price'].quantile(0.25)\nQ3 = df['price'].quantile(0.75)\nIQR = Q3 - Q1\nmask = (df['price'] &lt; Q1 - 1.5*IQR) | (df['price'] &gt; Q3 + 1.5*IQR)\noutliers = df[mask]\nprint(f'Найдено выбросов: {len(outliers)}')\n</code></pre><p>Главная ошибка новичков — автоматически удалять все выбросы. Иногда выброс — это самая ценная информация (например, мошенническая транзакция или редкий, но важный кейс). Всегда сначала разбирайтесь, откуда взялось экстремальное значение: ошибка ввода данных, единица измерения (метры vs километры) или реальное явление.</p>",
+      "links": [
+        {
+          "title": "Interquartile range — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Interquartile_range"
+        },
+        {
+          "title": "Outlier — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Outlier"
+        },
+        {
+          "title": "scipy.stats documentation",
+          "url": "https://docs.scipy.org/doc/scipy/reference/stats.html"
+        }
+      ]
+    },
+    {
+      "title": "Корреляционный анализ и его ловушки",
+      "level": "🟡 Middle",
+      "explanation": "<p>Корреляция показывает силу линейной связи между переменными, но не причинность и не нелинейные зависимости.</p><ul><li>Пирсон (<code>df.corr()</code>) — только линейные связи, чувствителен к выбросам</li><li>Спирмен (<code>df.corr(method='spearman')</code>) — монотонные связи, устойчивее к выбросам</li><li>Мультиколлинеарность признаков ломает интерпретируемость линейных моделей — проверяйте VIF</li></ul><pre><code>import seaborn as sns\ncorr = df.select_dtypes('number').corr(method='spearman')\nsns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0)\n</code></pre><p>Классическая ловушка — 'корреляция не значит причинность'. Например, продажи мороженого коррелируют с числом утоплений, но причина — жаркая погода (confounder). Ещё частая ошибка: считать корреляцию Пирсона на признаке с сильными выбросами, что даёт искажённый (обычно завышенный или заниженный) коэффициент. Всегда визуализируйте scatter plot рядом с числом корреляции — цифра без графика может обманывать (см. квартет Энскомба).</p>",
+      "links": [
+        {
+          "title": "Anscombe's quartet — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Anscombe%27s_quartet"
+        },
+        {
+          "title": "Correlation does not imply causation — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Correlation_does_not_imply_causation"
+        },
+        {
+          "title": "pandas.DataFrame.corr",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.corr.html"
+        }
+      ]
+    },
+    {
+      "title": "Визуализация категориальных данных",
+      "level": "🟢 Junior",
+      "explanation": "<p>Категориальные признаки требуют других инструментов, чем числовые: countplot, barplot, mosaic plot вместо гистограмм.</p><ul><li><code>sns.countplot(x='category', data=df)</code> — частоты категорий</li><li><code>pd.crosstab(df.cat1, df.cat2)</code> — таблица сопряжённости для двух категориальных переменных</li><li>Проверка дисбаланса классов — обязательна перед классификацией</li></ul><pre><code>counts = df['category'].value_counts(normalize=True)\nprint(counts)\n\nimport seaborn as sns\nsns.countplot(y='category', data=df, order=df['category'].value_counts().index)\n</code></pre><p>Совет: если категорий больше 15-20, не рисуйте все на одном barplot — сгруппируйте редкие в 'Other', иначе график превращается в нечитаемую 'расчёску'. Для целевой переменной в задачах классификации всегда стройте распределение классов первым делом: сильный дисбаланс (например 99/1) требует особых метрик (F1, PR-AUC) вместо accuracy.</p>",
+      "links": [
+        {
+          "title": "Seaborn categorical plots",
+          "url": "https://seaborn.pydata.org/tutorial/categorical.html"
+        },
+        {
+          "title": "pandas.crosstab",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.crosstab.html"
+        },
+        {
+          "title": "scikit-learn: class imbalance",
+          "url": "https://scikit-learn.org/stable/auto_examples/svm/plot_separating_hyperplane_unbalanced.html"
+        }
+      ]
+    },
+    {
+      "title": "Парные зависимости и multivariate-анализ",
+      "level": "🟡 Middle",
+      "explanation": "<p>Одномерный анализ не показывает взаимодействия между признаками. Парный и многомерный анализ раскрывает скрытые паттерны и сегменты.</p><ul><li><code>sns.pairplot(df, hue='target')</code> — окраска по таргету показывает разделимость классов</li><li><code>sns.scatterplot(x, y, hue, size)</code> — до 4 измерений на одном графике</li><li>FacetGrid для разбиения по категориям: <code>sns.FacetGrid(df, col='segment')</code></li></ul><pre><code>g = sns.FacetGrid(df, col='region', hue='churn', height=4)\ng.map(sns.scatterplot, 'tenure', 'monthly_charges', alpha=0.6)\ng.add_legend()\n</code></pre><p>На практике многомерный EDA часто раскрывает утечку данных или сегментацию, невидимую в одномерных срезах: например, два кластера точек на scatter plot могут означать, что в датасете смешаны данные из разных источников/периодов с разной логикой сбора. Не пренебрегайте раскраской (hue) по таргету — это самый быстрый способ увидеть, какие признаки потенциально полезны для модели.</p>",
+      "links": [
+        {
+          "title": "Seaborn pairplot",
+          "url": "https://seaborn.pydata.org/generated/seaborn.pairplot.html"
+        },
+        {
+          "title": "Seaborn FacetGrid",
+          "url": "https://seaborn.pydata.org/generated/seaborn.FacetGrid.html"
+        },
+        {
+          "title": "Seaborn relational plots tutorial",
+          "url": "https://seaborn.pydata.org/tutorial/relational.html"
+        }
+      ]
+    },
+    {
+      "title": "Plotly и интерактивная визуализация",
+      "level": "🟡 Middle",
+      "explanation": "<p>Plotly даёт интерактивность (zoom, hover, фильтры) без написания JS, что незаменимо при исследовании больших датасетов и презентации результатов стейкхолдерам.</p><ul><li><code>plotly.express</code> — быстрый высокоуровневый API, аналог seaborn</li><li>Hover-подсказки позволяют исследовать конкретные точки-выбросы прямо в браузере</li><li>Экспорт в HTML для шаринга без Jupyter: <code>fig.write_html('report.html')</code></li></ul><pre><code>import plotly.express as px\n\nfig = px.scatter(df, x='tenure', y='monthly_charges',\n                  color='churn', hover_data=['customer_id'],\n                  title='Отток клиентов')\nfig.write_html('churn.html')\nfig.show()\n</code></pre><p>Продакшен-совет: plotly отлично подходит для аналитических отчётов, но в Jupyter Notebook с большим количеством интерактивных графиков ноутбук может весить десятки мегабайт (весь JS встраивается в вывод ячейки). Используйте <code>fig.show(renderer='png')</code> для статичного превью при разработке и переключайтесь на интерактив только для финального отчёта.</p>",
+      "links": [
+        {
+          "title": "Plotly Python documentation",
+          "url": "https://plotly.com/python/"
+        },
+        {
+          "title": "Plotly Express",
+          "url": "https://plotly.com/python/plotly-express/"
+        },
+        {
+          "title": "Plotly Python API reference",
+          "url": "https://plotly.com/python-api-reference/"
+        }
+      ]
+    },
+    {
+      "title": "Streamlit: быстрые дашборды для EDA",
+      "level": "🟡 Middle",
+      "explanation": "<p>Streamlit позволяет за 20-30 минут превратить Jupyter-анализ в интерактивное веб-приложение, которым может пользоваться нетехнический коллега.</p><ul><li><code>st.dataframe</code>, <code>st.plotly_chart</code>, <code>st.sidebar</code> для фильтров</li><li>Кэширование тяжёлых вычислений через <code>@st.cache_data</code></li><li>Запуск: <code>streamlit run app.py</code></li></ul><pre><code>import streamlit as st\nimport pandas as pd\n\n@st.cache_data\ndef load_data():\n    return pd.read_csv('data.csv')\n\ndf = load_data()\ncategory = st.sidebar.selectbox('Категория', df['category'].unique())\nst.dataframe(df[df['category'] == category])\nst.bar_chart(df.groupby('category')['sales'].sum())\n</code></pre><p>Частая ошибка — не использовать <code>@st.cache_data</code>, из-за чего Streamlit перечитывает CSV или пересчитывает агрегаты при каждом взаимодействии пользователя, что делает дашборд ощутимо медленным. Для продакшен-дашбордов с большими данными рассмотрите предагрегацию данных заранее, а не 'сырые' вычисления на лету.</p>",
+      "links": [
+        {
+          "title": "Streamlit documentation",
+          "url": "https://docs.streamlit.io/"
+        },
+        {
+          "title": "Streamlit caching guide",
+          "url": "https://docs.streamlit.io/develop/concepts/architecture/caching"
+        },
+        {
+          "title": "Streamlit API reference",
+          "url": "https://docs.streamlit.io/develop/api-reference"
+        }
+      ]
+    },
+    {
+      "title": "Анализ целевой переменной (target)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Анализ таргета — первое, что нужно сделать в любой ML-задаче, ещё до анализа признаков: он определяет выбор метрик, модели и стратегии валидации.</p><ul><li>Классификация: баланс классов, <code>df['target'].value_counts(normalize=True)</code></li><li>Регрессия: распределение таргета, скошенность, наличие нулей/отрицательных значений</li><li>Скошенный таргет часто логарифмируют: <code>np.log1p(y)</code></li></ul><pre><code>import numpy as np\nimport seaborn as sns\n\nprint(df['target'].skew())\nsns.histplot(np.log1p(df['target']), kde=True)\n</code></pre><p>Пример из практики: в задаче предсказания цены недвижимости таргет почти всегда скошен вправо (немного очень дорогих объектов). Обучение модели на логарифме цены вместо самой цены часто заметно улучшает MAE/RMSE после обратного преобразования <code>np.expm1</code>. Не забывайте: если логарифмировали таргет для обучения, метрики на тесте нужно считать после обратного преобразования в исходную шкалу.</p>",
+      "links": [
+        {
+          "title": "numpy.log1p documentation",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.log1p.html"
+        },
+        {
+          "title": "scikit-learn: TransformedTargetRegressor",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.compose.TransformedTargetRegressor.html"
+        },
+        {
+          "title": "Skewness — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Skewness"
+        }
+      ]
+    },
+    {
+      "title": "Data leakage при EDA и подготовке данных",
+      "level": "🔴 Senior",
+      "explanation": "<p>Утечка данных (data leakage) — одна из самых опасных и незаметных ошибок: модель показывает отличные метрики на валидации, но полностью проваливается в проде.</p><ul><li>Никогда не считайте статистики (среднее, min/max, target encoding) на всём датасете до разделения train/test</li><li>Признаки, вычисленные 'из будущего' относительно момента предсказания — классическая утечка во временных рядах</li><li>Дубликаты строк, случайно попавшие и в train, и в test</li></ul><pre><code>from sklearn.model_selection import train_test_split\n\n# ПРАВИЛЬНО: сначала split, потом статистики только по train\ntrain, test = train_test_split(df, test_size=0.2, random_state=42)\nmean_price = train['price'].mean()  # считаем только на train\ntest['price_filled'] = test['price'].fillna(mean_price)\n</code></pre><p>Реальный кейс: в задаче кредитного скоринга колонка 'дата закрытия просрочки' была заполнена только для тех, кто уже вышел на просрочку — модель 'угадывала' таргет по факту наличия значения в признаке. Совет: перед сдачей модели в продакшен всегда спрашивайте про каждый признак — 'будет ли это значение доступно на момент реального предсказания?'. Если ответ 'нет' — это утечка.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: data leakage guide",
+          "url": "https://scikit-learn.org/stable/common_pitfalls.html#data-leakage"
+        },
+        {
+          "title": "sklearn.model_selection.train_test_split",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html"
+        },
+        {
+          "title": "Leakage in machine learning — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)"
+        }
+      ]
+    },
+    {
+      "title": "Missing values: паттерны пропусков",
+      "level": "🟡 Middle",
+      "explanation": "<p>Пропуски бывают трёх типов: MCAR (случайно), MAR (зависит от других признаков), MNAR (зависит от самого значения) — и стратегия обработки должна учитывать тип.</p><ul><li>Визуализация паттернов: <code>sns.heatmap(df.isna(), cbar=False)</code> или библиотека <code>missingno</code></li><li>Проверка: пропуски коррелируют с таргетом? Это может быть сигналом, а не шумом</li><li>Индикатор пропуска как отдельный признак: <code>df['x_missing'] = df['x'].isna().astype(int)</code></li></ul><pre><code>import missingno as msno\nmsno.matrix(df)\nmsno.heatmap(df)  # корреляции между пропусками разных колонок\n</code></pre><p>Совет из продакшена: если пропуски в колонке 'доход' сильно коррелируют с оттоком клиентов, само по себе отсутствие значения — сигнал (например, клиент не предоставил данные при заполнении анкеты), а не случайность. В таких случаях простое заполнение медианой убивает полезную информацию — лучше сохранить индикатор пропуска как отдельный бинарный признак.</p>",
+      "links": [
+        {
+          "title": "missingno on GitHub",
+          "url": "https://github.com/ResidentMario/missingno"
+        },
+        {
+          "title": "pandas: working with missing data",
+          "url": "https://pandas.pydata.org/docs/user_guide/missing_data.html"
+        },
+        {
+          "title": "scikit-learn: imputation of missing values",
+          "url": "https://scikit-learn.org/stable/modules/impute.html"
+        }
+      ]
+    },
+    {
+      "title": "Storytelling и отчёты по результатам EDA",
+      "level": "🟡 Middle",
+      "explanation": "<p>Хороший EDA-отчёт рассказывает историю: проблема → находки → рекомендации, а не просто набор графиков без выводов.</p><ul><li>Каждый график должен отвечать на конкретный вопрос бизнеса, а не быть 'на всякий случай'</li><li>Используйте единый цветовой стиль и подписи на понятном стейкхолдерам языке (не 'feature_23', а 'Средний чек')</li><li>Jupyter + nbconvert или Quarto для генерации PDF/HTML отчётов</li></ul><pre><code>jupyter nbconvert --to html --no-input eda_report.ipynb\n</code></pre><p>Практический совет: структурируйте отчёт по схеме 'один слайд/раздел — один инсайт'. Топ-менеджменту не нужны 30 графиков распределений — нужны 3-5 ключевых находки с конкретными числами и рекомендацией действия ('20% клиентов из региона X дают 60% выручки — стоит увеличить туда маркетинговый бюджет'). Скрывайте код (<code>--no-input</code>) в финальной версии отчёта для нетехнической аудитории.</p>",
+      "links": [
+        {
+          "title": "Jupyter nbconvert documentation",
+          "url": "https://nbconvert.readthedocs.io/en/latest/"
+        },
+        {
+          "title": "Quarto documentation",
+          "url": "https://quarto.org/docs/guide/"
+        },
+        {
+          "title": "Data storytelling — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Data_storytelling"
+        }
+      ]
+    },
+    {
+      "title": "Временные ряды: специфика EDA",
+      "level": "🔴 Senior",
+      "explanation": "<p>EDA временных рядов требует отдельного набора инструментов: обычная перетасовка данных и случайный train/test split здесь недопустимы.</p><ul><li>Декомпозиция на тренд/сезонность/остаток: <code>statsmodels.tsa.seasonal_decompose</code></li><li>Автокорреляция (ACF/PACF) для выбора лагов</li><li>Проверка на стационарность: тест Дики-Фуллера (<code>adfuller</code>)</li></ul><pre><code>from statsmodels.tsa.seasonal import seasonal_decompose\nresult = seasonal_decompose(df['sales'], model='additive', period=12)\nresult.plot()\n\nfrom statsmodels.tsa.stattools import adfuller\np_value = adfuller(df['sales'])[1]\nprint('Стационарен' if p_value < 0.05 else 'Нестационарен')\n</code></pre><p>Ключевая ошибка senior-уровня, которую до сих пор допускают: использование <code>train_test_split</code> со случайным перемешиванием на временных рядах — это прямая утечка из будущего в прошлое. Всегда используйте разбиение по времени (последние N% данных — тест) и <code>TimeSeriesSplit</code> для кросс-валидации. Также проверяйте резкие скачки/провалы — часто это смена методологии сбора данных, а не реальный тренд.</p>",
+      "links": [
+        {
+          "title": "statsmodels: seasonal_decompose",
+          "url": "https://www.statsmodels.org/stable/generated/statsmodels.tsa.seasonal.seasonal_decompose.html"
+        },
+        {
+          "title": "statsmodels: Augmented Dickey-Fuller test",
+          "url": "https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html"
+        },
+        {
+          "title": "scikit-learn: TimeSeriesSplit",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Зачем нужен этап EDA перед построением модели?",
+      "options": [
+        "Чтобы сразу выбрать гиперпараметры модели",
+        "Чтобы понять структуру данных, найти аномалии и сформировать гипотезы",
+        "Чтобы ускорить обучение модели на GPU",
+        "EDA нужен только для регрессионных задач"
+      ],
+      "answer": 1,
+      "explain": "EDA помогает понять данные и найти проблемы (пропуски, выбросы, утечки) до моделирования — это экономит время и предотвращает ошибки."
+    },
+    {
+      "q": "Какая функция seaborn лучше всего подходит для быстрого обзора попарных зависимостей между числовыми признаками?",
+      "options": [
+        "sns.countplot",
+        "sns.heatmap",
+        "sns.pairplot",
+        "sns.barplot"
+      ],
+      "answer": 2,
+      "explain": "sns.pairplot строит матрицу scatter-графиков и распределений для всех пар числовых признаков."
+    },
+    {
+      "q": "Почему нельзя автоматически удалять все выбросы из данных?",
+      "options": [
+        "Выбросы всегда являются ошибками ввода данных",
+        "Удаление выбросов запрещено в pandas",
+        "Иногда выброс несёт ценную информацию (например, редкое, но важное событие)",
+        "Выбросы никак не влияют на модели"
+      ],
+      "answer": 2,
+      "explain": "Нужно сначала разобраться в природе выброса — это может быть ошибка данных или значимая информация (например, мошенничество)."
+    },
+    {
+      "q": "Чем корреляция Спирмена отличается от корреляции Пирсона?",
+      "options": [
+        "Спирмен измеряет монотонные связи и устойчивее к выбросам",
+        "Спирмен работает только с категориальными переменными",
+        "Пирсон и Спирмен всегда дают одинаковый результат",
+        "Спирмен показывает причинно-следственную связь"
+      ],
+      "answer": 0,
+      "explain": "Спирмен основан на рангах и выявляет монотонные (не обязательно линейные) зависимости, устойчивее к выбросам."
+    },
+    {
+      "q": "Что из перечисленного является примером data leakage?",
+      "options": [
+        "Построение гистограммы распределения таргета",
+        "Вычисление среднего значения признака на всём датасете до разделения train/test",
+        "Использование boxplot для поиска выбросов",
+        "Логарифмирование скошенного таргета"
+      ],
+      "answer": 1,
+      "explain": "Статистики нужно считать только на train, иначе информация из test 'просачивается' в обучение, завышая метрики."
+    },
+    {
+      "q": "Почему для временных рядов нельзя использовать случайное перемешивание при train_test_split?",
+      "options": [
+        "Это создаёт утечку данных из будущего в прошлое",
+        "sklearn не поддерживает временные ряды вообще",
+        "Случайное перемешивание ускоряет обучение",
+        "Это единственный правильный способ для временных рядов"
+      ],
+      "answer": 0,
+      "explain": "Случайное перемешивание нарушает временной порядок и позволяет модели 'видеть будущее' при обучении, что не соответствует реальному сценарию использования."
+    },
+    {
+      "q": "Какой инструмент позволяет за короткое время создать интерактивный веб-дашборд для EDA на Python без написания JS/HTML?",
+      "options": [
+        "matplotlib",
+        "Streamlit",
+        "numpy",
+        "scipy"
+      ],
+      "answer": 1,
+      "explain": "Streamlit превращает Python-скрипт в интерактивное веб-приложение с минимальным количеством кода."
+    },
+    {
+      "q": "Что стоит сделать, если пропуски в признаке сильно коррелируют с целевой переменной?",
+      "options": [
+        "Всегда удалять строки с пропусками",
+        "Игнорировать этот факт и просто заполнить средним",
+        "Рассмотреть добавление индикатора пропуска как отдельного признака",
+        "Автоматически исключить признак из анализа"
+      ],
+      "answer": 2,
+      "explain": "Сам факт пропуска может нести полезную информацию, поэтому индикатор-признак часто помогает модели, а не только заполнение значения."
+    },
+    {
+      "q": "Какая метрика/тест используется для проверки стационарности временного ряда?",
+      "options": [
+        "Тест хи-квадрат",
+        "Тест Дики-Фуллера (ADF)",
+        "t-критерий Стьюдента",
+        "Коэффициент Джини"
+      ],
+      "answer": 1,
+      "explain": "Расширенный тест Дики-Фуллера (Augmented Dickey-Fuller) проверяет гипотезу о наличии единичного корня, то есть нестационарности ряда."
+    },
+    {
+      "q": "Что является хорошей практикой при подготовке итогового отчёта по EDA для нетехнических стейкхолдеров?",
+      "options": [
+        "Показать все построенные графики без исключения для полноты картины",
+        "Использовать названия колонок из кода (feature_23, col_7) без перевода",
+        "Выделить 3-5 ключевых инсайтов с конкретными числами и рекомендациями",
+        "Обязательно показывать весь программный код анализа"
+      ],
+      "answer": 2,
+      "explain": "Отчёт должен рассказывать историю с понятными выводами и рекомендациями, а не быть набором технических артефактов."
+    }
+  ]
+}

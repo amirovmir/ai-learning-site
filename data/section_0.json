@@ -1,0 +1,384 @@
+{
+  "phase": "Phase 1 — Python + Math + Data",
+  "section": "🐍 Python для ML",
+  "topics": [
+    {
+      "title": "Синтаксис и идиомы Python для ML",
+      "level": "🟢 Junior",
+      "explanation": "<p>ML-код читают чаще, чем пишут — поэтому идиоматичность важна не меньше, чем корректность. Используйте list/dict comprehensions вместо ручных циклов, где это не убивает читаемость.</p><ul><li>Распаковка: <code>a, *rest = [1,2,3,4]</code></li><li>f-строки для логов: <code>f\"loss={loss:.4f}\"</code></li><li>Контекстные менеджеры для ресурсов: файлы, GPU-контексты, таймеры</li></ul><pre><code># Плохо\nresult = []\nfor x in data:\n    if x > 0:\n        result.append(x**2)\n\n# Хорошо\nresult = [x**2 for x in data if x > 0]</code></pre><p>Типичная ошибка новичков — злоупотребление вложенными comprehensions ради 'питоничности'. Если выражение не читается за 2 секунды — разбейте на цикл или вынесите в функцию.</p><table><tr><th>Идиома</th><th>Когда использовать</th></tr><tr><td>comprehension</td><td>простая трансформация/фильтр</td></tr><tr><td>generator expr</td><td>большие данные, ленивая обработка</td></tr><tr><td>явный цикл</td><td>сложная логика, побочные эффекты</td></tr></table><p>Совет из продакшена: включайте <code>ruff</code> или <code>flake8</code> в pre-commit — это экономит часы на код-ревью.</p>",
+      "links": [
+        {
+          "title": "Python docs — официальная документация",
+          "url": "https://docs.python.org/3/"
+        },
+        {
+          "title": "PEP 8 — Style Guide for Python Code",
+          "url": "https://peps.python.org/pep-0008/"
+        },
+        {
+          "title": "Ruff — линтер",
+          "url": "https://docs.astral.sh/ruff/"
+        }
+      ]
+    },
+    {
+      "title": "Типизация (type hints, mypy)",
+      "level": "🟢 Junior",
+      "explanation": "<p>В ML-пайплайнах данные текут через десятки функций (загрузка → препроцессинг → модель → постобработка). Аннотации типов резко снижают число багов вида 'ожидал numpy array, получил list'.</p><pre><code>from typing import Optional\nimport numpy as np\n\ndef normalize(x: np.ndarray, eps: float = 1e-8) -> np.ndarray:\n    return (x - x.mean()) / (x.std() + eps)\n\ndef load_batch(path: str) -> tuple[np.ndarray, np.ndarray]:\n    ...</code></pre><p>Для сложных структур используйте <code>TypedDict</code>, <code>Protocol</code> или <code>pydantic.BaseModel</code> — особенно для конфигов экспериментов.</p><ul><li><code>Optional[int]</code> вместо магических <code>-1</code> как 'нет значения'</li><li><code>Literal[\"train\", \"val\", \"test\"]</code> вместо голых строк</li><li>Запускайте <code>mypy --strict</code> в CI хотя бы на core-модулях</li></ul><p>Частая ошибка: аннотировать входы, но забыть про возвращаемое значение генераторов (<code>Iterator[torch.Tensor]</code>) — из-за этого IDE не подсказывает автодополнение дальше по цепочке.</p>",
+      "links": [
+        {
+          "title": "typing — документация Python",
+          "url": "https://docs.python.org/3/library/typing.html"
+        },
+        {
+          "title": "mypy — документация",
+          "url": "https://mypy.readthedocs.io/"
+        },
+        {
+          "title": "Pydantic — документация",
+          "url": "https://docs.pydantic.dev/"
+        }
+      ]
+    },
+    {
+      "title": "Управление окружением: venv, poetry, uv",
+      "level": "🟢 Junior",
+      "explanation": "<p>Несовпадение версий библиотек — источник боли номер один в ML-командах ('у меня работает'). Изоляция окружений обязательна.</p><pre><code># venv (встроенный, минимальный)\npython -m venv .venv\nsource .venv/bin/activate\npip install -r requirements.txt\n\n# poetry (управление зависимостями + lock-файл)\npoetry init\npoetry add torch numpy pandas\npoetry lock\n\n# uv (быстрая замена pip/venv, 2024+)\nuv venv\nuv pip install -r requirements.txt</code></pre><p><code>uv</code> сейчас стремительно вытесняет pip в новых проектах благодаря скорости (написан на Rust) — стоит привыкать к нему уже сейчас.</p><table><tr><th>Инструмент</th><th>Плюс</th><th><th>Минус</th></tr><tr><td>venv+pip</td><td>встроен</td><td>нет lock-файла из коробки</td></tr><tr><td>poetry</td><td>lock, dev-группы</td><td>медленнее</td></tr><tr><td>uv</td><td>очень быстрый</td><td>относительно новый</td></tr></table><p>Совет: всегда фиксируйте версии CUDA-зависимых пакетов (torch, torchvision) вместе с версией CUDA-тулкита — иначе получите runtime-краш на GPU-сервере, которого не было локально на CPU.</p>",
+      "links": [
+        {
+          "title": "venv — документация Python",
+          "url": "https://docs.python.org/3/library/venv.html"
+        },
+        {
+          "title": "Poetry — документация",
+          "url": "https://python-poetry.org/docs/"
+        },
+        {
+          "title": "uv — документация Astral",
+          "url": "https://docs.astral.sh/uv/"
+        }
+      ]
+    },
+    {
+      "title": "ООП и dataclasses в ML-коде",
+      "level": "🟡 Middle",
+      "explanation": "<p>ООП в ML используется умеренно: модели, датасеты, конфиги хорошо ложатся в классы, но не стоит городить иерархии ради иерархий.</p><pre><code>from dataclasses import dataclass, field\n\n@dataclass\nclass TrainConfig:\n    lr: float = 3e-4\n    batch_size: int = 32\n    epochs: int = 10\n    tags: list[str] = field(default_factory=list)\n\ncfg = TrainConfig(lr=1e-3)\nprint(cfg)  # авто __repr__</code></pre><p><code>dataclass</code> экономит десятки строк boilerplate (<code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>) и отлично подходит для конфигов экспериментов, которые потом сериализуются в YAML/JSON.</p><ul><li>Используйте <code>frozen=True</code> для неизменяемых конфигов — защита от случайной мутации в середине обучения</li><li>Наследование от <code>torch.nn.Module</code> — классический паттерн для моделей</li><li>Не путайте dataclass с pydantic: pydantic нужен, когда требуется валидация входных данных (например, из API или CLI)</li></ul><p>Частая ошибка: изменяемые значения по умолчанию (<code>list = []</code>) — используйте <code>field(default_factory=list)</code>, иначе все экземпляры будут делить один и тот же список.</p>",
+      "links": [
+        {
+          "title": "dataclasses — документация Python",
+          "url": "https://docs.python.org/3/library/dataclasses.html"
+        },
+        {
+          "title": "PyTorch nn.Module",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Module.html"
+        },
+        {
+          "title": "Pydantic models",
+          "url": "https://docs.pydantic.dev/latest/concepts/models/"
+        }
+      ]
+    },
+    {
+      "title": "Генераторы и итераторы",
+      "level": "🟡 Middle",
+      "explanation": "<p>Датасеты в ML часто не помещаются в память целиком — генераторы позволяют обрабатывать данные лениво, без загрузки всего файла.</p><pre><code>def read_large_jsonl(path: str):\n    with open(path, encoding='utf-8') as f:\n        for line in f:\n            yield json.loads(line)\n\n# Бесконечный генератор батчей\nimport itertools\n\ndef infinite_batches(data, batch_size):\n    it = iter(data)\n    while True:\n        batch = list(itertools.islice(it, batch_size))\n        if not batch:\n            it = iter(data)\n            continue\n        yield batch</code></pre><p>PyTorch <code>Dataset</code>/<code>IterableDataset</code> и TensorFlow <code>tf.data</code> построены поверх этой же идеи — понимание итераторов помогает писать эффективные кастомные загрузчики данных.</p><ul><li><code>yield</code> vs <code>return</code>: генератор возобновляется с того же места, экономя память</li><li>Генераторные выражения <code>(x**2 for x in range(1000000))</code> вместо списков для больших последовательностей</li><li>Осторожно: генератор можно пройти только один раз — если нужно несколько эпох, пересоздавайте его или используйте <code>itertools.tee</code></li></ul><p>Продакшен-совет: при мультипроцессной загрузке данных (<code>num_workers > 0</code>) убедитесь, что генератор не держит несериализуемые объекты (сокеты, open-файлы) — это частая причина зависаний DataLoader.</p>",
+      "links": [
+        {
+          "title": "Python Generators — документация",
+          "url": "https://docs.python.org/3/howto/functional.html"
+        },
+        {
+          "title": "itertools — документация",
+          "url": "https://docs.python.org/3/library/itertools.html"
+        },
+        {
+          "title": "PyTorch Dataset & DataLoader",
+          "url": "https://pytorch.org/tutorials/beginner/basics/data_tutorial.html"
+        }
+      ]
+    },
+    {
+      "title": "Декораторы",
+      "level": "🟡 Middle",
+      "explanation": "<p>Декораторы — must-have для кросс-cutting задач: логирование времени эпохи, кэширование препроцессинга, retry для нестабильных API (например, вызовы LLM).</p><pre><code>import functools\nimport time\n\ndef timeit(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__}: {time.perf_counter()-start:.3f}s\")\n        return result\n    return wrapper\n\n@timeit\ndef train_epoch(model, loader):\n    ...\n\n@functools.lru_cache(maxsize=128)\ndef expensive_feature_extraction(text: str) -> tuple:\n    ...</code></pre><p><code>functools.wraps</code> обязателен — без него теряются <code>__name__</code> и docstring обёрнутой функции, что ломает интроспекцию и pytest fixtures.</p><ul><li><code>@lru_cache</code> — отличный кэш для чистых функций (без побочных эффектов и мутабельных аргументов)</li><li>Декораторы с параметрами: <code>@retry(times=3)</code> — фабрика декораторов</li><li>PyTorch активно использует декораторы: <code>@torch.no_grad()</code>, <code>@torch.compile</code></li></ul><p>Ошибка: применять <code>@lru_cache</code> к методам класса без учёта, что <code>self</code> тоже кэшируется — это может держать объекты в памяти дольше ожидаемого (утечка).</p>",
+      "links": [
+        {
+          "title": "functools — документация Python",
+          "url": "https://docs.python.org/3/library/functools.html"
+        },
+        {
+          "title": "Python Decorators — Real Python",
+          "url": "https://realpython.com/primer-on-python-decorators/"
+        },
+        {
+          "title": "torch.no_grad — PyTorch docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.no_grad.html"
+        }
+      ]
+    },
+    {
+      "title": "Обработка ошибок и логирование",
+      "level": "🟡 Middle",
+      "explanation": "<p>Долгие обучающие запуски (часы/дни) требуют устойчивости к сбоям: NaN в лоссе, OOM на GPU, обрыв сети при скачивании данных.</p><pre><code>import logging\n\nlogger = logging.getLogger(__name__)\n\ntry:\n    loss = compute_loss(batch)\n    if torch.isnan(loss):\n        raise ValueError(\"NaN loss detected\")\nexcept torch.cuda.OutOfMemoryError:\n    logger.warning(\"OOM, очищаю кэш и уменьшаю batch\")\n    torch.cuda.empty_cache()\nexcept ValueError as e:\n    logger.error(f\"Training aborted: {e}\")\n    raise\nfinally:\n    checkpoint_manager.save_if_needed()</code></pre><ul><li>Никогда не используйте голый <code>except:</code> — он ловит даже <code>KeyboardInterrupt</code></li><li>Настраивайте <code>logging</code> вместо <code>print</code> — уровни (DEBUG/INFO/WARNING), ротация файлов, интеграция с W&B/MLflow</li><li>Свои исключения (<code>class DataValidationError(Exception)</code>) делают код читаемым для команды</li></ul><p>Продакшен-совет: логируйте не только ошибки, но и метрики на каждом шаге в структурированном виде (JSON-логи) — это упрощает последующий парсинг и алертинг.</p>",
+      "links": [
+        {
+          "title": "logging — документация Python",
+          "url": "https://docs.python.org/3/library/logging.html"
+        },
+        {
+          "title": "Errors and Exceptions — Python docs",
+          "url": "https://docs.python.org/3/tutorial/errors.html"
+        },
+        {
+          "title": "Weights & Biases — документация",
+          "url": "https://docs.wandb.ai/"
+        }
+      ]
+    },
+    {
+      "title": "Работа с файлами и форматами: JSON, CSV, Parquet",
+      "level": "🟢 Junior",
+      "explanation": "<p>Выбор формата хранения данных сильно влияет на скорость пайплайна. CSV прост, но медленный и не хранит типы; Parquet — колоночный, сжатый, быстрый для аналитики и ML.</p><pre><code>import pandas as pd\n\ndf = pd.read_csv('data.csv')\ndf.to_parquet('data.parquet', engine='pyarrow', compression='snappy')\n\n# Parquet читается в разы быстрее и весит меньше\ndf2 = pd.read_parquet('data.parquet', columns=['id', 'label'])\n\nimport json\nwith open('config.json', encoding='utf-8') as f:\n    cfg = json.load(f)</code></pre><table><tr><th>Формат</th><th>Плюсы</th><th>Минусы</th></tr><tr><td>CSV</td><td>универсальный, читаемый</td><td>нет типов, медленный</td></tr><tr><td>JSON/JSONL</td><td>вложенные структуры</td><td>больше размер</td></tr><tr><td>Parquet</td><td>быстрый, сжатие, схема</td><td>не читается глазами</td></tr></table><p>Совет: для больших датасетов используйте JSONL (по строке на JSON-объект) — можно стримить построчно, не загружая всё в память. Частая ошибка — забыть <code>encoding='utf-8'</code> при работе с русскоязычными данными на Windows, где локаль по умолчанию cp1251.</p>",
+      "links": [
+        {
+          "title": "pandas IO tools",
+          "url": "https://pandas.pydata.org/docs/user_guide/io.html"
+        },
+        {
+          "title": "Apache Parquet — документация",
+          "url": "https://parquet.apache.org/docs/"
+        },
+        {
+          "title": "json — документация Python",
+          "url": "https://docs.python.org/3/library/json.html"
+        }
+      ]
+    },
+    {
+      "title": "Asyncio: базовые концепции",
+      "level": "🟡 Middle",
+      "explanation": "<p>В ML-инженерии asyncio чаще всего нужен не для самого обучения (там GIL и NumPy/PyTorch и так уходят в C-код), а для инференс-серверов и параллельных вызовов внешних LLM/API.</p><pre><code>import asyncio\nimport aiohttp\n\nasync def fetch_embedding(session, text: str):\n    async with session.post(API_URL, json={\"text\": text}) as resp:\n        return await resp.json()\n\nasync def main(texts: list[str]):\n    async with aiohttp.ClientSession() as session:\n        tasks = [fetch_embedding(session, t) for t in texts]\n        return await asyncio.gather(*tasks)\n\nresults = asyncio.run(main([\"привет\", \"мир\"]))</code></pre><ul><li><code>asyncio.gather</code> — параллельные независимые запросы (например, батч эмбеддингов через API)</li><li>Не смешивайте блокирующий код (тяжёлые вычисления, <code>time.sleep</code>) с event loop без <code>run_in_executor</code></li><li>FastAPI + async — стандарт для сервинга ML-моделей с высокой конкурентностью</li></ul><p>Частая ошибка: использовать синхронный <code>requests</code> внутри <code>async def</code> — это блокирует весь event loop и убивает весь смысл асинхронности.</p>",
+      "links": [
+        {
+          "title": "asyncio — документация Python",
+          "url": "https://docs.python.org/3/library/asyncio.html"
+        },
+        {
+          "title": "aiohttp — документация",
+          "url": "https://docs.aiohttp.org/"
+        },
+        {
+          "title": "FastAPI — документация",
+          "url": "https://fastapi.tiangolo.com/"
+        }
+      ]
+    },
+    {
+      "title": "Jupyter Notebook: эффективная работа",
+      "level": "🟢 Junior",
+      "explanation": "<p>Jupyter — стандартный инструмент для EDA и прототипирования, но требует дисциплины, иначе превращается в 'спагетти из ячеек'.</p><pre><code># Автоперезагрузка изменённых модулей\n%load_ext autoreload\n%autoreload 2\n\n# Замер времени ячейки\n%%timeit\nresult = expensive_function(data)\n\n# Быстрый просмотр датафрейма\ndf.describe()\ndf.head()\n\n# Магия для inline-графиков\n%matplotlib inline</code></pre><ul><li>Пишите ячейки так, чтобы Kernel → Restart & Run All проходил без ошибок — иначе notebook не воспроизводим</li><li>Выносите переиспользуемый код в <code>.py</code>-модули и импортируйте — не копипастьте функции между ноутбуками</li><li>Используйте <code>nbstripout</code> в git-хуках, чтобы не коммитить output ячеек (особенно с большими графиками)</li></ul><p>Типичная ошибка: полагаться на состояние переменных, оставшееся от удалённой ячейки — код работает у автора, но падает при чистом перезапуске. Это одна из главных причин 'у меня работало' на код-ревью.</p>",
+      "links": [
+        {
+          "title": "Jupyter — документация",
+          "url": "https://docs.jupyter.org/"
+        },
+        {
+          "title": "IPython magic commands",
+          "url": "https://ipython.readthedocs.io/en/stable/interactive/magics.html"
+        },
+        {
+          "title": "nbstripout — GitHub",
+          "url": "https://github.com/kynan/nbstripout"
+        }
+      ]
+    },
+    {
+      "title": "Профилирование и оптимизация Python-кода",
+      "level": "🔴 Senior",
+      "explanation": "<p>Прежде чем оптимизировать, нужно измерить — интуиция про 'узкие места' в ML-пайплайнах часто ошибается (обычно тормозит I/O или препроцессинг, а не сама модель).</p><pre><code>import cProfile\nimport pstats\n\nprofiler = cProfile.Profile()\nprofiler.enable()\ntrain_epoch(model, loader)\nprofiler.disable()\nstats = pstats.Stats(profiler).sort_stats('cumulative')\nstats.print_stats(15)\n\n# Построчный профайлер\n# pip install line_profiler\n# %lprun -f my_function my_function(data)\n\n# Профилирование памяти\n# pip install memory_profiler\n# @profile\ndef process(data):\n    ...</code></pre><ul><li><code>cProfile</code> — по функциям, быстрый обзор</li><li><code>line_profiler</code> — построчно, для точечной оптимизации горячего цикла</li><li>Векторизация вместо Python-циклов: <code>numpy</code>/<code>pandas</code> операции вместо <code>for</code> ускоряют код в 10-100x</li><li><code>torch.utils.data.DataLoader(num_workers=N)</code> для распараллеливания загрузки данных, пока GPU считает</li></ul><p>Продакшен-совет: используйте PyTorch Profiler (<code>torch.profiler</code>) для анализа GPU/CPU трасс — часто выясняется, что узкое место не модель, а копирование тензоров CPU↔GPU или synchronize-вызовы.</p>",
+      "links": [
+        {
+          "title": "cProfile — документация Python",
+          "url": "https://docs.python.org/3/library/profile.html"
+        },
+        {
+          "title": "line_profiler — GitHub",
+          "url": "https://github.com/pyutils/line_profiler"
+        },
+        {
+          "title": "PyTorch Profiler",
+          "url": "https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html"
+        }
+      ]
+    },
+    {
+      "title": "Тестирование с pytest",
+      "level": "🟡 Middle",
+      "explanation": "<p>ML-код тестируют иначе, чем обычный backend: важны не только 'функция вернула правильный тип', но и инварианты данных (формы тензоров, диапазоны значений, отсутствие NaN).</p><pre><code>import pytest\nimport numpy as np\n\n@pytest.fixture\ndef sample_batch():\n    return np.random.randn(32, 128)\n\ndef test_normalize_shape(sample_batch):\n    out = normalize(sample_batch)\n    assert out.shape == sample_batch.shape\n\ndef test_normalize_no_nan(sample_batch):\n    out = normalize(sample_batch)\n    assert not np.isnan(out).any()\n\n@pytest.mark.parametrize(\"batch_size\", [1, 16, 64])\ndef test_model_forward(batch_size):\n    x = torch.randn(batch_size, 10)\n    out = model(x)\n    assert out.shape == (batch_size, 2)</code></pre><ul><li><code>pytest.fixture</code> — переиспользуемые тестовые данные</li><li><code>parametrize</code> — проверка на разных batch size/edge cases (пустой батч, батч из 1 элемента)</li><li>Тестируйте препроцессинг отдельно от модели — это самая частая точка отказа в проде (сдвиг распределения между train и inference)</li></ul><p>Частая ошибка: тестировать только 'счастливый путь'. Обязательно проверяйте граничные случаи: пустые строки, отсутствующие ключи в JSON, батч размера 1 (легко ломает BatchNorm).</p>",
+      "links": [
+        {
+          "title": "pytest — документация",
+          "url": "https://docs.pytest.org/"
+        },
+        {
+          "title": "pytest fixtures — документация",
+          "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+        },
+        {
+          "title": "NumPy testing",
+          "url": "https://numpy.org/doc/stable/reference/routines.testing.html"
+        }
+      ]
+    },
+    {
+      "title": "Управление конфигурацией экспериментов (Hydra/YAML)",
+      "level": "🔴 Senior",
+      "explanation": "<p>При десятках экспериментов хардкод гиперпараметров в коде превращается в хаос. Инструменты вроде Hydra позволяют компоновать и переопределять конфиги из CLI, сохраняя воспроизводимость.</p><pre><code># config.yaml\nmodel:\n  hidden_size: 256\n  num_layers: 4\ntrain:\n  lr: 3e-4\n  epochs: 20\n\n# main.py\nimport hydra\nfrom omegaconf import DictConfig\n\n@hydra.main(config_path=\"conf\", config_name=\"config\")\ndef main(cfg: DictConfig):\n    print(cfg.model.hidden_size)\n    train(cfg)\n\n# Запуск с переопределением из CLI:\n# python main.py train.lr=1e-3 model.num_layers=6</code></pre><ul><li>Hydra автоматически создаёт папку с логами и сохранённым конфигом для каждого запуска — критично для воспроизводимости</li><li>Multirun (<code>-m</code>) позволяет запускать grid search по гиперпараметрам одной командой</li><li>Альтернатива полегче — простой <code>dataclass</code> + <code>argparse</code>/<code>typer</code> для небольших проектов</li></ul><p>Совет: всегда сохраняйте итоговый resolved-конфиг вместе с чекпоинтом модели — без этого через полгода никто не вспомнит, с какими гиперпараметрами обучалась 'best_model.pt'.</p>",
+      "links": [
+        {
+          "title": "Hydra — документация",
+          "url": "https://hydra.cc/docs/intro/"
+        },
+        {
+          "title": "OmegaConf — документация",
+          "url": "https://omegaconf.readthedocs.io/"
+        },
+        {
+          "title": "PyYAML — документация",
+          "url": "https://pyyaml.org/wiki/PyYAMLDocumentation"
+        }
+      ]
+    },
+    {
+      "title": "Работа с командной строкой: argparse и typer",
+      "level": "🟢 Junior",
+      "explanation": "<p>Скрипты обучения и инференса почти всегда запускаются с параметрами из терминала — CLI-интерфейс должен быть понятным и валидировать входные данные.</p><pre><code>import argparse\n\nparser = argparse.ArgumentParser()\nparser.add_argument('--lr', type=float, default=3e-4)\nparser.add_argument('--epochs', type=int, default=10)\nparser.add_argument('--model', choices=['resnet', 'vit'], required=True)\nargs = parser.parse_args()\n\n# Современная альтернатива — typer (автогенерация из type hints)\nimport typer\n\napp = typer.Typer()\n\n@app.command()\ndef train(lr: float = 3e-4, epochs: int = 10):\n    ...\n\nif __name__ == \"__main__\":\n    app()</code></pre><ul><li><code>typer</code> генерирует <code>--help</code> и валидацию автоматически из аннотаций типов — меньше boilerplate, чем <code>argparse</code></li><li>Используйте <code>choices</code>/<code>Literal</code> для параметров с фиксированным набором значений — предотвращает опечатки типа <code>--model resnett</code></li><li>Не забывайте про <code>--dry-run</code> флаг для проверки конфигурации без реального запуска долгого обучения</li></ul><p>Совет: логируйте полную командную строку запуска (<code>sys.argv</code>) в файл эксперимента — это спасает, когда нужно воспроизвести результат недельной давности.</p>",
+      "links": [
+        {
+          "title": "argparse — документация Python",
+          "url": "https://docs.python.org/3/library/argparse.html"
+        },
+        {
+          "title": "Typer — документация",
+          "url": "https://typer.tiangolo.com/"
+        },
+        {
+          "title": "Click — документация",
+          "url": "https://click.palletsprojects.com/"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что произойдёт при повторных вызовах функции с dataclass-полем `tags: list[str] = []` вместо `field(default_factory=list)`?",
+      "options": [
+        "Ничего, каждый экземпляр получит новый пустой список",
+        "Все экземпляры класса будут делить один и тот же список",
+        "Будет выброшено исключение TypeError при создании класса",
+        "Python автоматически исправит это на default_factory"
+      ],
+      "answer": 1,
+      "explain": "Изменяемые значения по умолчанию создаются один раз и разделяются между всеми экземплярами — классическая ловушка Python."
+    },
+    {
+      "q": "Почему для больших JSONL-датасетов предпочтительнее использовать генератор, а не загружать весь файл в список?",
+      "options": [
+        "Генераторы работают быстрее благодаря JIT-компиляции",
+        "Список нельзя итерировать более одного раза",
+        "Генератор обрабатывает данные лениво, не требуя загрузки всего файла в память",
+        "JSONL нельзя прочитать иначе, кроме как генератором"
+      ],
+      "answer": 2,
+      "explain": "Генераторы дают ленивую (lazy) обработку — данные читаются и обрабатываются по одному элементу, что экономит память на больших датасетах."
+    },
+    {
+      "q": "Зачем нужен functools.wraps при написании декораторов?",
+      "options": [
+        "Он ускоряет выполнение обёрнутой функции",
+        "Без него декоратор не будет работать вообще",
+        "Он сохраняет __name__ и docstring оригинальной функции после обёртывания",
+        "Он автоматически кэширует результат функции"
+      ],
+      "answer": 2,
+      "explain": "functools.wraps копирует метаданные (__name__, __doc__) из оригинальной функции в обёртку, что важно для интроспекции и отладки."
+    },
+    {
+      "q": "Почему голый `except:` считается плохой практикой в обработке ошибок?",
+      "options": [
+        "Он работает медленнее, чем except Exception",
+        "Он ловит даже KeyboardInterrupt и SystemExit, что мешает штатной остановке программы",
+        "Python не позволяет использовать его в функциях",
+        "Он не совместим с логированием через модуль logging"
+      ],
+      "answer": 1,
+      "explain": "Голый except перехватывает все исключения, включая системные (KeyboardInterrupt, SystemExit), что затрудняет корректное завершение и отладку."
+    },
+    {
+      "q": "В чём главное преимущество формата Parquet перед CSV для ML-датасетов?",
+      "options": [
+        "Parquet можно открыть в обычном текстовом редакторе",
+        "Parquet — колоночный формат со схемой и сжатием, что ускоряет чтение и уменьшает размер",
+        "CSV не поддерживается библиотекой pandas",
+        "Parquet не требует установки дополнительных библиотек"
+      ],
+      "answer": 1,
+      "explain": "Parquet хранит данные по колонкам с типами и компрессией, что даёт значительный выигрыш в скорости чтения и объёме по сравнению с построчным текстовым CSV."
+    },
+    {
+      "q": "Что произойдёт, если внутри async-функции вызвать синхронный блокирующий requests.get() без run_in_executor?",
+      "options": [
+        "asyncio автоматически распараллелит вызов",
+        "Будет выброшено RuntimeError",
+        "Это заблокирует весь event loop, лишая смысла асинхронность",
+        "Запрос выполнится быстрее благодаря event loop"
+      ],
+      "answer": 2,
+      "explain": "Синхронные блокирующие вызовы внутри async-кода останавливают event loop целиком, блокируя выполнение всех остальных корутин."
+    },
+    {
+      "q": "Какой инструмент лучше всего подходит для построчного (line-by-line) профилирования горячего участка Python-кода?",
+      "options": [
+        "cProfile",
+        "line_profiler",
+        "pytest",
+        "mypy"
+      ],
+      "answer": 1,
+      "explain": "line_profiler даёт построчную статистику времени выполнения, тогда как cProfile агрегирует данные по функциям в целом."
+    },
+    {
+      "q": "Почему в pytest-тестах для ML-пайплайнов важно проверять батч размера 1?",
+      "options": [
+        "Потому что pytest требует минимум один тест-кейс с размером 1",
+        "Батч из одного элемента может ломать слои вроде BatchNorm, которые рассчитаны на статистику по батчу",
+        "Это ускоряет прохождение тестов",
+        "Батч размера 1 обязателен по стандарту PEP8"
+      ],
+      "answer": 1,
+      "explain": "BatchNorm и подобные слои вычисляют статистику (среднее, дисперсию) по батчу, и батч из одного элемента — частый edge case, ломающий такие вычисления."
+    },
+    {
+      "q": "Зачем сохранять resolved-конфиг эксперимента (например, через Hydra) вместе с чекпоинтом модели?",
+      "options": [
+        "Это требование лицензии PyTorch",
+        "Чтобы уменьшить размер чекпоинта",
+        "Чтобы впоследствии можно было точно воспроизвести, с какими гиперпараметрами обучалась модель",
+        "Конфиг ускоряет загрузку модели при инференсе"
+      ],
+      "answer": 2,
+      "explain": "Без сохранённого конфига невозможно достоверно восстановить условия обучения модели спустя время — это критично для воспроизводимости экспериментов."
+    },
+    {
+      "q": "В чём преимущество uv перед классической связкой pip + venv?",
+      "options": [
+        "uv поддерживает только Python 2.7",
+        "uv значительно быстрее благодаря реализации на Rust",
+        "uv автоматически обучает модели",
+        "uv заменяет pytest для тестирования"
+      ],
+      "answer": 1,
+      "explain": "uv написан на Rust и обеспечивает значительно более высокую скорость установки зависимостей и создания окружений по сравнению с pip/venv."
+    }
+  ]
+}

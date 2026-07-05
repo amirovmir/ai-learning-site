@@ -1,0 +1,399 @@
+{
+  "phase": "Phase 3 — Deep Learning",
+  "section": "🛠️ Обучение нейросетей",
+  "topics": [
+    {
+      "title": "Оптимизаторы: SGD, Momentum, Adam, AdamW",
+      "level": "🟢 Junior",
+      "explanation": "<p>Оптимизатор определяет, как веса обновляются по градиенту. <code>SGD</code> — простой, но требует тщательного подбора learning rate; с <code>momentum</code> сходится быстрее за счёт накопления инерции.</p><ul><li><b>SGD+Momentum</b> — хорош для CV задач, часто даёт лучшую генерализацию</li><li><b>Adam</b> — адаптивный LR для каждого параметра, быстро сходится, но может переобучаться и иметь худшую генерализацию</li><li><b>AdamW</b> — Adam с правильно отделённым weight decay (не смешанным с градиентом) — стандарт в трансформерах</li></ul><p>Типичная ошибка — использовать Adam с L2-регуляризацией вместо AdamW: в Adam decay взаимодействует с адаптивным LR некорректно.</p><pre><code>import torch.optim as optim\nopt = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)\n</code></pre><p>Совет: для NLP/трансформеров почти всегда берите AdamW; для классического CV (ResNet) SGD+momentum с хорошим schedule часто даёт top-1 accuracy выше.</p>",
+      "links": [
+        {
+          "title": "PyTorch torch.optim docs",
+          "url": "https://pytorch.org/docs/stable/optim.html"
+        },
+        {
+          "title": "Decoupled Weight Decay Regularization (AdamW paper)",
+          "url": "https://arxiv.org/abs/1711.05101"
+        },
+        {
+          "title": "Adam: A Method for Stochastic Optimization",
+          "url": "https://arxiv.org/abs/1412.6980"
+        }
+      ]
+    },
+    {
+      "title": "Learning rate и стратегии его изменения (schedulers)",
+      "level": "🟢 Junior",
+      "explanation": "<p>LR — самый влиятельный гиперпараметр. Слишком большой — расхождение loss, слишком маленький — обучение стоит на месте или застревает в плохом минимуме.</p><ul><li><b>StepLR / MultiStepLR</b> — снижение в заданные эпохи</li><li><b>CosineAnnealingLR</b> — плавное косинусное затухание, популярно в CV/NLP</li><li><b>ReduceLROnPlateau</b> — снижает LR, если метрика перестала улучшаться</li><li><b>Warmup</b> — постепенный разогрев LR в первые шаги, обязателен для трансформеров и больших batch size</li></ul><pre><code>from torch.optim.lr_scheduler import CosineAnnealingLR\nscheduler = CosineAnnealingLR(opt, T_max=epochs)\nfor epoch in range(epochs):\n    train_one_epoch()\n    scheduler.step()\n</code></pre><p>Практический совет: используйте <code>LR range test</code> (fastai / torch-lr-finder) чтобы найти оптимальный диапазон LR перед полноценным обучением — это экономит часы экспериментов.</p>",
+      "links": [
+        {
+          "title": "PyTorch lr_scheduler docs",
+          "url": "https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate"
+        },
+        {
+          "title": "Cyclical Learning Rates for Training Neural Networks",
+          "url": "https://arxiv.org/abs/1506.01186"
+        },
+        {
+          "title": "fast.ai course",
+          "url": "https://course.fast.ai/"
+        }
+      ]
+    },
+    {
+      "title": "Batch Normalization и Layer Normalization",
+      "level": "🟡 Middle",
+      "explanation": "<p>Нормализация активаций стабилизирует и ускоряет обучение, борется с internal covariate shift.</p><table><tr><th>BatchNorm</th><th>LayerNorm</th></tr><tr><td>Нормализует по batch-измерению</td><td>Нормализует по признакам одного примера</td></tr><tr><td>Плохо работает при малом batch size</td><td>Не зависит от размера batch</td></tr><tr><td>Стандарт для CNN</td><td>Стандарт для трансформеров/RNN</td></tr></table><p>Типичная ошибка — забыть переключить модель в <code>model.eval()</code> перед инференсом: BatchNorm использует running statistics только в eval-режиме, иначе метрики на валидации будут «плавать».</p><pre><code>import torch.nn as nn\nbn = nn.BatchNorm2d(64)\nln = nn.LayerNorm(768)\n</code></pre><p>При маленьком batch (&lt;8) рассмотрите <code>GroupNorm</code> — компромисс между BN и LN.</p>",
+      "links": [
+        {
+          "title": "Batch Normalization paper",
+          "url": "https://arxiv.org/abs/1502.03167"
+        },
+        {
+          "title": "Layer Normalization paper",
+          "url": "https://arxiv.org/abs/1607.06450"
+        },
+        {
+          "title": "PyTorch nn.BatchNorm2d docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html"
+        },
+        {
+          "title": "PyTorch nn.LayerNorm docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html"
+        }
+      ]
+    },
+    {
+      "title": "Dropout и регуляризация",
+      "level": "🟢 Junior",
+      "explanation": "<p>Dropout случайным образом зануляет часть нейронов на этапе обучения, снижая переобучение за счёт эффекта ансамбля подсетей.</p><ul><li><code>nn.Dropout(p=0.5)</code> — типично для полносвязных слоёв</li><li><code>nn.Dropout2d</code> — зануляет целые каналы в свёрточных картах</li><li>Weight decay (L2) — штраф за большие веса, встроен в оптимизатор</li><li>Label smoothing — сглаживает one-hot таргеты, снижает самоуверенность модели</li></ul><pre><code>class MLP(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.fc1 = nn.Linear(784, 256)\n        self.drop = nn.Dropout(0.3)\n        self.fc2 = nn.Linear(256, 10)\n    def forward(self, x):\n        x = torch.relu(self.fc1(x))\n        x = self.drop(x)\n        return self.fc2(x)\n</code></pre><p>Частая ошибка новичков: забыть <code>model.eval()</code>/<code>model.train()</code> — dropout продолжает работать на инференсе, давая недетерминированные предсказания.</p>",
+      "links": [
+        {
+          "title": "Dropout: A Simple Way to Prevent Overfitting",
+          "url": "https://jmlr.org/papers/v15/srivastava14a.html"
+        },
+        {
+          "title": "PyTorch nn.Dropout docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html"
+        },
+        {
+          "title": "PyTorch weight_decay / regularization guide",
+          "url": "https://pytorch.org/docs/stable/optim.html"
+        }
+      ]
+    },
+    {
+      "title": "Gradient Clipping",
+      "level": "🟡 Middle",
+      "explanation": "<p>Обрезка градиентов предотвращает 'взрыв градиентов' — резкий скачок нормы градиента, который ломает обучение (особенно в RNN и глубоких трансформерах).</p><pre><code>loss.backward()\ntorch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)\noptimizer.step()\n</code></pre><ul><li><b>clip_grad_norm_</b> — обрезает по общей норме всех градиентов (предпочтительно)</li><li><b>clip_grad_value_</b> — обрезает поэлементно, грубее</li></ul><p>В продакшене при обучении LLM почти всегда ставят <code>max_norm=1.0</code> как страховку от редких «выбросов» в данных, которые дают аномально большой градиент и могут NaN'ить всю тренировку за один шаг.</p><p>Совет: логируйте норму градиента каждые N шагов — резкие скачки сигнализируют о проблемах с данными или LR.</p>",
+      "links": [
+        {
+          "title": "PyTorch clip_grad_norm_ docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_norm_.html"
+        },
+        {
+          "title": "On the difficulty of training RNNs (exploding gradients)",
+          "url": "https://arxiv.org/abs/1211.5063"
+        }
+      ]
+    },
+    {
+      "title": "Mixed Precision Training (AMP)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Обучение в fp16/bf16 вместо fp32 ускоряет вычисления в 2-3 раза на современных GPU (Tensor Cores) и снижает потребление памяти, позволяя увеличить batch size.</p><pre><code>scaler = torch.cuda.amp.GradScaler()\nfor x, y in loader:\n    optimizer.zero_grad()\n    with torch.cuda.amp.autocast():\n        out = model(x)\n        loss = criterion(out, y)\n    scaler.scale(loss).backward()\n    scaler.step(optimizer)\n    scaler.update()\n</code></pre><p><code>GradScaler</code> нужен для fp16, чтобы избежать underflow маленьких градиентов (масштабирует loss перед backward). Для <code>bf16</code> (доступен на A100/H100/TPU) scaler обычно не требуется — динамический диапазон шире.</p><p>Частая ошибка — забыть <code>scaler.unscale_</code> перед gradient clipping, из-за чего клиппинг применяется к неверно масштабированным градиентам.</p>",
+      "links": [
+        {
+          "title": "PyTorch Automatic Mixed Precision docs",
+          "url": "https://pytorch.org/docs/stable/amp.html"
+        },
+        {
+          "title": "Mixed Precision Training paper",
+          "url": "https://arxiv.org/abs/1710.03740"
+        },
+        {
+          "title": "NVIDIA Mixed Precision Training guide",
+          "url": "https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html"
+        }
+      ]
+    },
+    {
+      "title": "Early Stopping",
+      "level": "🟢 Junior",
+      "explanation": "<p>Остановка обучения при отсутствии улучшения метрики на валидации — простой и эффективный способ борьбы с переобучением и экономии compute.</p><pre><code>best_loss, patience, counter = float('inf'), 5, 0\nfor epoch in range(epochs):\n    val_loss = validate(model)\n    if val_loss < best_loss:\n        best_loss = val_loss\n        counter = 0\n        torch.save(model.state_dict(), 'best.pt')\n    else:\n        counter += 1\n        if counter >= patience:\n            print('Early stopping')\n            break\n</code></pre><ul><li>Всегда сохраняйте checkpoint лучшей модели, а не последней</li><li>Patience подбирают эмпирически (обычно 3-10 эпох)</li><li>В связке с ReduceLROnPlateau может давать ложные срабатывания — следите за порядком проверок</li></ul><p>Совет: используйте готовые реализации (Keras <code>EarlyStopping</code>, PyTorch Lightning <code>EarlyStopping</code> callback) вместо ручного кода — меньше багов.</p>",
+      "links": [
+        {
+          "title": "PyTorch Lightning EarlyStopping callback",
+          "url": "https://lightning.ai/docs/pytorch/stable/common/early_stopping.html"
+        },
+        {
+          "title": "Keras EarlyStopping docs",
+          "url": "https://keras.io/api/callbacks/early_stopping/"
+        }
+      ]
+    },
+    {
+      "title": "Аугментации данных",
+      "level": "🟢 Junior",
+      "explanation": "<p>Аугментации искусственно расширяют обучающую выборку, улучшая обобщающую способность модели без сбора новых данных.</p><ul><li><b>CV</b>: поворот, отражение, кроп, цветовые искажения, <code>CutMix</code>, <code>MixUp</code>, <code>RandAugment</code></li><li><b>NLP</b>: back-translation, синонимайзинг, случайное маскирование токенов</li><li><b>Audio</b>: time/frequency masking (SpecAugment)</li></ul><pre><code>import torchvision.transforms as T\ntransform = T.Compose([\n    T.RandomResizedCrop(224),\n    T.RandomHorizontalFlip(),\n    T.ColorJitter(0.2, 0.2, 0.2),\n    T.ToTensor(),\n])\n</code></pre><p>Типичная ошибка — применять аугментации к валидационному/тестовому набору (кроме TTA), что искажает метрики. Также важно не переусердствовать: слишком агрессивные аугментации могут «сломать» семантику (например, обрезать значимый объект целиком).</p>",
+      "links": [
+        {
+          "title": "torchvision.transforms docs",
+          "url": "https://pytorch.org/vision/stable/transforms.html"
+        },
+        {
+          "title": "MixUp paper",
+          "url": "https://arxiv.org/abs/1710.09412"
+        },
+        {
+          "title": "CutMix paper",
+          "url": "https://arxiv.org/abs/1905.04899"
+        },
+        {
+          "title": "RandAugment paper",
+          "url": "https://arxiv.org/abs/1909.13719"
+        }
+      ]
+    },
+    {
+      "title": "Мониторинг обучения: TensorBoard и Weights & Biases",
+      "level": "🟡 Middle",
+      "explanation": "<p>Без логирования метрик отладка обучения превращается в гадание. Логируйте loss, метрики, LR, норму градиентов, примеры предсказаний.</p><pre><code>import wandb\nwandb.init(project='my-model')\nfor epoch in range(epochs):\n    loss = train_epoch()\n    wandb.log({'loss': loss, 'lr': scheduler.get_last_lr()[0]})\n</code></pre><ul><li><b>TensorBoard</b> — бесплатный, локальный, встроен в PyTorch (<code>torch.utils.tensorboard</code>)</li><li><b>W&B</b> — облачный, удобен для сравнения экспериментов и командной работы, есть sweep для подбора гиперпараметров</li></ul><p>Продакшен-совет: логируйте не только скалярные метрики, но и гистограммы весов/градиентов — помогает быстро увидеть vanishing/exploding gradients или мёртвые ReLU-нейроны.</p>",
+      "links": [
+        {
+          "title": "PyTorch TensorBoard integration docs",
+          "url": "https://pytorch.org/docs/stable/tensorboard.html"
+        },
+        {
+          "title": "Weights & Biases docs",
+          "url": "https://docs.wandb.ai/"
+        }
+      ]
+    },
+    {
+      "title": "Распределённое обучение: DDP и Data Parallel",
+      "level": "🔴 Senior",
+      "explanation": "<p><code>DistributedDataParallel</code> (DDP) — стандартный способ обучать модели на нескольких GPU/машинах в PyTorch, значительно эффективнее устаревшего <code>DataParallel</code>.</p><ul><li><b>DataParallel</b> — один процесс, разбивает batch между GPU, узкое место на GPU0, не рекомендуется</li><li><b>DDP</b> — отдельный процесс на каждый GPU, градиенты синхронизируются через all-reduce, линейное масштабирование</li><li><b>FSDP</b> (Fully Sharded Data Parallel) — шардирует сами веса/оптимизатор между GPU для очень больших моделей</li></ul><pre><code>import torch.distributed as dist\nfrom torch.nn.parallel import DistributedDataParallel as DDP\n\ndist.init_process_group('nccl')\nmodel = DDP(model.to(rank), device_ids=[rank])\n</code></pre><p>Запуск: <code>torchrun --nproc_per_node=4 train.py</code>. Частая ошибка — не использовать <code>DistributedSampler</code>, из-за чего каждый процесс видит одинаковые данные вместо своего шарда.</p>",
+      "links": [
+        {
+          "title": "PyTorch Distributed Data Parallel docs",
+          "url": "https://pytorch.org/docs/stable/notes/ddp.html"
+        },
+        {
+          "title": "PyTorch FSDP tutorial",
+          "url": "https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html"
+        },
+        {
+          "title": "PyTorch distributed overview",
+          "url": "https://pytorch.org/tutorials/beginner/dist_overview.html"
+        }
+      ]
+    },
+    {
+      "title": "Подбор гиперпараметров (HPO)",
+      "level": "🔴 Senior",
+      "explanation": "<p>Ручной подбор LR, batch size, dropout и т.д. неэффективен при большом пространстве параметров. Используйте автоматизированные подходы.</p><ul><li><b>Grid Search</b> — перебор всех комбинаций, дорого при большом числе параметров</li><li><b>Random Search</b> — часто эффективнее grid при том же бюджете</li><li><b>Bayesian Optimization</b> (Optuna, Hyperopt) — строит суррогатную модель качества по параметрам</li><li><b>Hyperband/ASHA</b> — раннее прекращение неперспективных запусков</li></ul><pre><code>import optuna\ndef objective(trial):\n    lr = trial.suggest_float('lr', 1e-5, 1e-1, log=True)\n    model = build_model()\n    acc = train_and_eval(model, lr)\n    return acc\n\nstudy = optuna.create_study(direction='maximize')\nstudy.optimize(objective, n_trials=50)\n</code></pre><p>Совет: фиксируйте seed и логируйте все trial'ы в W&B sweeps — иначе результаты HPO невоспроизводимы.</p>",
+      "links": [
+        {
+          "title": "Optuna documentation",
+          "url": "https://optuna.readthedocs.io/en/stable/"
+        },
+        {
+          "title": "Random Search for Hyper-Parameter Optimization",
+          "url": "https://jmlr.org/papers/v13/bergstra12a.html"
+        },
+        {
+          "title": "Weights & Biases Sweeps docs",
+          "url": "https://docs.wandb.ai/guides/sweeps/"
+        }
+      ]
+    },
+    {
+      "title": "Затухающие и взрывающиеся градиенты",
+      "level": "🟡 Middle",
+      "explanation": "<p>В глубоких сетях градиент при обратном распространении может экспоненциально уменьшаться (vanishing) или расти (exploding) с числом слоёв.</p><ul><li><b>Vanishing</b>: типично для sigmoid/tanh в глубоких сетях и длинных RNN — сеть перестаёт обучать ранние слои</li><li><b>Exploding</b>: типично для RNN, при большом LR или плохой инициализации — loss становится NaN</li></ul><table><tr><th>Проблема</th><th>Решение</th></tr><tr><td>Vanishing</td><td>ReLU/GELU, residual connections, BatchNorm, LSTM/GRU вместо vanilla RNN</td></tr><tr><td>Exploding</td><td>Gradient clipping, меньший LR, правильная инициализация (Xavier/Kaiming)</td></tr></table><pre><code>nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')\n</code></pre><p>Диагностика: логируйте норму градиента по слоям — если она монотонно убывает к первым слоям, это vanishing gradient.</p>",
+      "links": [
+        {
+          "title": "On the difficulty of training RNNs",
+          "url": "https://arxiv.org/abs/1211.5063"
+        },
+        {
+          "title": "Deep Residual Learning (ResNet) paper",
+          "url": "https://arxiv.org/abs/1512.03385"
+        },
+        {
+          "title": "PyTorch nn.init docs",
+          "url": "https://pytorch.org/docs/stable/nn.init.html"
+        }
+      ]
+    },
+    {
+      "title": "Инициализация весов",
+      "level": "🟡 Middle",
+      "explanation": "<p>Правильная инициализация весов критична для стабильного старта обучения глубоких сетей.</p><ul><li><b>Xavier/Glorot</b> — для сетей с sigmoid/tanh, сохраняет дисперсию активаций</li><li><b>Kaiming/He</b> — для ReLU-семейства, учитывает, что половина нейронов зануляется</li><li><b>Zero init</b> для bias, иногда для последнего слоя residual блока (по инициативе ResNet)</li></ul><pre><code>for m in model.modules():\n    if isinstance(m, nn.Linear):\n        nn.init.kaiming_normal_(m.weight, nonlinearity='relu')\n        nn.init.zeros_(m.bias)\n</code></pre><p>Большинство фреймворков (PyTorch) уже используют разумную инициализацию по умолчанию, но при кастомных архитектурах (например, очень глубокие сети без residual) плохая инициализация может привести к тому, что модель вообще не сдвинется с места за первые эпохи.</p>",
+      "links": [
+        {
+          "title": "Understanding the difficulty of training deep feedforward networks (Xavier init)",
+          "url": "https://proceedings.mlr.press/v9/glorot10a.html"
+        },
+        {
+          "title": "Delving Deep into Rectifiers (Kaiming init)",
+          "url": "https://arxiv.org/abs/1502.01852"
+        },
+        {
+          "title": "PyTorch nn.init docs",
+          "url": "https://pytorch.org/docs/stable/nn.init.html"
+        }
+      ]
+    },
+    {
+      "title": "Чекпоинты и воспроизводимость обучения",
+      "level": "🟢 Junior",
+      "explanation": "<p>Сохранение состояния модели, оптимизатора и scheduler позволяет возобновлять обучение после сбоев и переиспользовать модели.</p><pre><code>torch.save({\n    'epoch': epoch,\n    'model_state': model.state_dict(),\n    'optimizer_state': optimizer.state_dict(),\n    'scheduler_state': scheduler.state_dict(),\n}, 'checkpoint.pt')\n\nckpt = torch.load('checkpoint.pt')\nmodel.load_state_dict(ckpt['model_state'])\n</code></pre><ul><li>Фиксируйте seed (<code>torch.manual_seed</code>, <code>numpy.random.seed</code>) для воспроизводимости</li><li>При многодневном обучении сохраняйте чекпоинты регулярно (каждые N шагов), а не только в конце</li><li>Версионируйте чекпоинты вместе с кодом и конфигом гиперпараметров (DVC, MLflow)</li></ul><p>Частая production-ошибка — потерять чекпоинт при падении спот-инстанса; настраивайте автосохранение в S3/бакет каждые несколько минут для длительных тренировок.</p>",
+      "links": [
+        {
+          "title": "PyTorch Saving and Loading Models tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/saving_loading_models.html"
+        },
+        {
+          "title": "MLflow documentation",
+          "url": "https://mlflow.org/docs/latest/index.html"
+        },
+        {
+          "title": "DVC documentation",
+          "url": "https://dvc.org/doc"
+        }
+      ]
+    },
+    {
+      "title": "Batch size и эффект масштаба",
+      "level": "🔴 Senior",
+      "explanation": "<p>Размер батча влияет на скорость сходимости, качество градиентных оценок и итоговую генерализацию модели.</p><ul><li>Маленький batch — шумные градиенты, лучше генерализация, но медленнее на GPU (недоиспользование параллелизма)</li><li>Большой batch — точные градиенты, быстрее эпоха, но риск застревания в острых минимумах (хуже generalization gap)</li></ul><p>Правило линейного масштабирования LR: при увеличении batch size в K раз, LR также увеличивают примерно в K раз (с warmup), иначе большой batch не даёт выигрыша в скорости обучения.</p><pre><code># эффективный batch = batch_size * accumulation_steps\nfor i, (x, y) in enumerate(loader):\n    loss = criterion(model(x), y) / accum_steps\n    loss.backward()\n    if (i + 1) % accum_steps == 0:\n        optimizer.step()\n        optimizer.zero_grad()\n</code></pre><p>Gradient accumulation позволяет эмулировать большой batch size при ограниченной GPU-памяти — стандартный приём при обучении LLM.</p>",
+      "links": [
+        {
+          "title": "Accurate, Large Minibatch SGD paper",
+          "url": "https://arxiv.org/abs/1706.02677"
+        },
+        {
+          "title": "On Large-Batch Training for Deep Learning (generalization gap)",
+          "url": "https://arxiv.org/abs/1609.04836"
+        },
+        {
+          "title": "Hugging Face gradient accumulation guide",
+          "url": "https://huggingface.co/docs/transformers/perf_train_gpu_one"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Почему AdamW предпочтительнее Adam при использовании weight decay?",
+      "options": [
+        "AdamW быстрее вычисляется на GPU",
+        "AdamW корректно отделяет weight decay от адаптивного градиентного шага",
+        "AdamW не требует learning rate",
+        "AdamW работает только с трансформерами"
+      ],
+      "answer": 1,
+      "explain": "В Adam L2-регуляризация смешивается с адаптивным LR некорректно; AdamW применяет decay напрямую к весам, минуя эту проблему."
+    },
+    {
+      "q": "Зачем нужен warmup learning rate в начале обучения трансформеров?",
+      "options": [
+        "Чтобы ускорить загрузку данных",
+        "Чтобы избежать нестабильности из-за больших градиентов на старте при случайной инициализации",
+        "Чтобы уменьшить размер модели",
+        "Warmup нужен только для CNN"
+      ],
+      "answer": 1,
+      "explain": "На старте веса случайны, и большой LR может привести к расхождению; постепенный разогрев стабилизирует ранние шаги обучения."
+    },
+    {
+      "q": "В чём ключевое отличие BatchNorm от LayerNorm?",
+      "options": [
+        "BatchNorm нормализует по признакам одного примера, LayerNorm — по batch",
+        "BatchNorm нормализует по batch-измерению, LayerNorm — по признакам внутри одного примера",
+        "Они математически идентичны",
+        "LayerNorm применяется только к изображениям"
+      ],
+      "answer": 1,
+      "explain": "BatchNorm зависит от статистики по батчу и плохо работает при малом batch size, LayerNorm независим от размера батча и используется в трансформерах."
+    },
+    {
+      "q": "Что произойдёт, если забыть вызвать model.eval() перед инференсом модели с Dropout и BatchNorm?",
+      "options": [
+        "Ничего, поведение не изменится",
+        "Модель будет работать быстрее",
+        "Dropout продолжит зануление нейронов, а BatchNorm не будет использовать running statistics — предсказания станут недетерминированными",
+        "Модель перестанет запускаться"
+      ],
+      "answer": 2,
+      "explain": "В train-режиме Dropout активен, а BatchNorm использует статистику текущего батча вместо накопленной — это искажает инференс."
+    },
+    {
+      "q": "Для чего используется gradient clipping?",
+      "options": [
+        "Для ускорения forward pass",
+        "Для предотвращения взрыва градиентов и NaN-значений loss",
+        "Для увеличения batch size",
+        "Для замены оптимизатора"
+      ],
+      "answer": 1,
+      "explain": "Clipping ограничивает норму градиента, защищая от резких выбросов, которые могут разрушить обучение за один шаг."
+    },
+    {
+      "q": "Какую роль играет GradScaler в mixed precision обучении (fp16)?",
+      "options": [
+        "Уменьшает размер модели",
+        "Масштабирует loss перед backward, чтобы избежать underflow маленьких градиентов в fp16",
+        "Заменяет функцию активации",
+        "Ускоряет загрузку датасета"
+      ],
+      "answer": 1,
+      "explain": "fp16 имеет узкий динамический диапазон, и маленькие градиенты могут обнулиться; GradScaler масштабирует loss вверх перед backward и обратно перед шагом оптимизатора."
+    },
+    {
+      "q": "Какая типичная ошибка возникает при использовании аугментаций данных?",
+      "options": [
+        "Применение аугментаций к обучающей выборке",
+        "Применение аугментаций к валидационному/тестовому набору, искажающее метрики",
+        "Использование библиотеки torchvision",
+        "Слишком малое число эпох"
+      ],
+      "answer": 1,
+      "explain": "Валидация и тест должны отражать реальное распределение данных без искусственных искажений (кроме специальных случаев вроде TTA)."
+    },
+    {
+      "q": "Чем DistributedDataParallel (DDP) отличается от устаревшего DataParallel?",
+      "options": [
+        "DDP работает только на CPU",
+        "DDP использует отдельный процесс на каждый GPU с синхронизацией градиентов через all-reduce, что даёт лучшее масштабирование",
+        "DDP не поддерживает несколько GPU",
+        "DataParallel быстрее DDP при любом числе GPU"
+      ],
+      "answer": 1,
+      "explain": "DataParallel создаёт узкое место на GPU0 и работает в одном процессе, тогда как DDP параллелит вычисления по отдельным процессам почти линейно."
+    },
+    {
+      "q": "Что делает gradient accumulation?",
+      "options": [
+        "Увеличивает физический размер GPU-памяти",
+        "Эмулирует больший эффективный batch size, накапливая градиенты за несколько минибатчей перед шагом оптимизатора",
+        "Заменяет BatchNorm",
+        "Уменьшает число эпох обучения"
+      ],
+      "answer": 1,
+      "explain": "Accumulation позволяет тренироваться с большим эффективным batch size при ограниченной памяти GPU, суммируя градиенты нескольких forward/backward проходов."
+    },
+    {
+      "q": "Какой метод чаще всего используется для решения проблемы vanishing gradients в глубоких сетях?",
+      "options": [
+        "Увеличение batch size",
+        "Residual connections, ReLU/GELU активации и BatchNorm",
+        "Уменьшение количества слоёв до одного",
+        "Отключение обратного распространения"
+      ],
+      "answer": 1,
+      "explain": "Residual connections создают прямой путь для градиента, а ReLU-подобные активации не насыщаются так, как sigmoid/tanh, что смягчает затухание градиентов."
+    }
+  ]
+}

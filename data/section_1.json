@@ -1,0 +1,388 @@
+{
+  "phase": "Phase 1 — Python + Math + Data",
+  "section": "📐 Математика для ML",
+  "topics": [
+    {
+      "title": "Векторы и векторные операции",
+      "level": "🟢 Junior",
+      "explanation": "<p>Вектор — упорядоченный набор чисел, задающий точку или направление в пространстве. В ML вектор — это, как правило, одно наблюдение (строка признаков).</p><ul><li>Сложение и вычитание — покомпонентно</li><li>Скалярное произведение (dot product) — мера \"схожести\" направлений, основа косинусного сходства</li><li>Норма вектора (L1, L2) — длина, используется в регуляризации</li></ul><pre><code>import numpy as np\na = np.array([1, 2, 3])\nb = np.array([4, 5, 6])\ndot = a @ b            # 32\nnorm_l2 = np.linalg.norm(a)   # sqrt(1+4+9)\ncos_sim = dot / (np.linalg.norm(a) * np.linalg.norm(b))\n</code></pre><p>Типичная ошибка новичков — путать поэлементное умножение <code>a * b</code> и матричное/скалярное <code>a @ b</code>. В NumPy это разные операции, и на больших моделях такая опечатка молча даёт неверные градиенты.</p><p>Совет: всегда проверяйте <code>.shape</code> массивов перед операцией — 90% багов в ML-коде это mismatch размерностей.</p>",
+      "links": [
+        {
+          "title": "NumPy: Linear algebra",
+          "url": "https://numpy.org/doc/stable/reference/routines.linalg.html"
+        },
+        {
+          "title": "3Blue1Brown: Essence of Linear Algebra",
+          "url": "https://www.3blue1brown.com/topics/linear-algebra"
+        },
+        {
+          "title": "Vector (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Euclidean_vector"
+        }
+      ]
+    },
+    {
+      "title": "Матрицы и матричные операции",
+      "level": "🟢 Junior",
+      "explanation": "<p>Матрица — таблица чисел, в ML чаще всего это батч данных (строки — объекты, столбцы — признаки) или веса слоя нейросети.</p><table><tr><th>Операция</th><th>Смысл</th></tr><tr><td>Транспонирование <code>A.T</code></td><td>меняет строки и столбцы местами</td></tr><tr><td>Умножение <code>A @ B</code></td><td>линейное преобразование, основа Dense/Linear слоёв</td></tr><tr><td>Обратная матрица <code>np.linalg.inv(A)</code></td><td>решение систем уравнений (аналитическая регрессия)</td></tr></table><pre><code>import numpy as np\nX = np.random.randn(100, 5)   # 100 объектов, 5 признаков\nW = np.random.randn(5, 1)     # веса\ny_pred = X @ W                # (100, 1)\n</code></pre><p>Продакшен-совет: при работе с PyTorch/TensorFlow правило то же, но размерности называют \"shape broadcasting\". Ошибка <code>RuntimeError: mat1 and mat2 shapes cannot be multiplied</code> — самая частая на старте, лечится проверкой <code>(N, in_features) @ (in_features, out_features)</code>.</p>",
+      "links": [
+        {
+          "title": "NumPy: Array broadcasting",
+          "url": "https://numpy.org/doc/stable/user/basics.broadcasting.html"
+        },
+        {
+          "title": "PyTorch: torch.nn.Linear",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Linear.html"
+        },
+        {
+          "title": "Matrix (mathematics) — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Matrix_(mathematics)"
+        }
+      ]
+    },
+    {
+      "title": "Собственные значения и собственные векторы",
+      "level": "🟡 Middle",
+      "explanation": "<p>Для матрицы <code>A</code> собственный вектор <code>v</code> и собственное значение <code>λ</code> удовлетворяют <code>A v = λ v</code> — вектор не меняет направление при преобразовании, лишь масштабируется.</p><ul><li>Лежат в основе PCA (снижение размерности) — собственные векторы матрицы ковариации задают главные компоненты</li><li>Используются в спектральной кластеризации и анализе устойчивости обучения (собственные значения гессиана)</li></ul><pre><code>import numpy as np\nX = np.random.randn(200, 3)\nX -= X.mean(axis=0)\ncov = np.cov(X.T)\neigvals, eigvecs = np.linalg.eigh(cov)\n# сортируем по убыванию значимости\norder = np.argsort(eigvals)[::-1]\nprincipal = eigvecs[:, order[0]]\n</code></pre><p>Практический момент: <code>np.linalg.eig</code> vs <code>np.linalg.eigh</code> — для симметричных матриц (как ковариация) всегда используйте <code>eigh</code>, он быстрее и численно стабильнее.</p><p>Интуиция для собеседования: большие собственные значения гессиана функции потерь → крутые направления → нужен меньший learning rate, иначе расходимость.</p>",
+      "links": [
+        {
+          "title": "NumPy: numpy.linalg.eigh",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.linalg.eigh.html"
+        },
+        {
+          "title": "scikit-learn: PCA",
+          "url": "https://scikit-learn.org/stable/modules/decomposition.html#pca"
+        },
+        {
+          "title": "Eigenvalues and eigenvectors — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors"
+        }
+      ]
+    },
+    {
+      "title": "Производные и градиент",
+      "level": "🟢 Junior",
+      "explanation": "<p>Производная показывает скорость изменения функции. Градиент — вектор частных производных функции по каждому параметру, указывает направление наискорейшего роста.</p><pre><code>import torch\nx = torch.tensor(3.0, requires_grad=True)\ny = x**2 + 2*x\ny.backward()\nprint(x.grad)  # dy/dx = 2x+2 = 8\n</code></pre><ul><li>Для обучения модели градиент функции потерь по весам показывает, куда \"толкать\" веса</li><li>Автоматическое дифференцирование (autograd) в PyTorch/TensorFlow считает это за вас — но важно понимать, что происходит под капотом</li></ul><p>Частая ошибка: забыть <code>optimizer.zero_grad()</code> перед <code>backward()</code> — градиенты накапливаются между итерациями, и модель обучается некорректно, хотя ошибок в коде нет.</p><p>Совет ментора: если <code>loss.backward()</code> падает с <code>RuntimeError: grad can be implicitly created only for scalar outputs</code>, значит вы вызвали backward на тензоре, а не на скаляре — нужно сначала усреднить (<code>.mean()</code>) или просуммировать.</p>",
+      "links": [
+        {
+          "title": "PyTorch: Autograd mechanics",
+          "url": "https://pytorch.org/docs/stable/notes/autograd.html"
+        },
+        {
+          "title": "PyTorch: torch.autograd",
+          "url": "https://pytorch.org/docs/stable/autograd.html"
+        },
+        {
+          "title": "karpathy/micrograd",
+          "url": "https://github.com/karpathy/micrograd"
+        }
+      ]
+    },
+    {
+      "title": "Chain rule (правило цепочки) и backpropagation",
+      "level": "🟡 Middle",
+      "explanation": "<p>Chain rule позволяет вычислить производную сложной функции через производные её составных частей: <code>d(f(g(x)))/dx = f'(g(x)) * g'(x)</code>. Backpropagation — это применение chain rule послойно, от выхода сети к входу.</p><pre><code># Ручной пример: y = sigmoid(w*x + b)\nimport numpy as np\nw, x, b = 0.5, 2.0, 0.1\nz = w*x + b\ny = 1/(1+np.exp(-z))\n# dL/dy известна (например, из loss)\ndL_dy = 0.3\n# chain rule: dL/dz = dL/dy * dy/dz, dy/dz = y*(1-y)\ndL_dz = dL_dy * y*(1-y)\ndL_dw = dL_dz * x   # dz/dw = x\n</code></pre><p>Понимание chain rule критично для отладки vanishing/exploding gradients: при глубоких сетях произведение множества маленьких производных (&lt;1) стремится к нулю — сигнал не доходит до первых слоёв.</p><ul><li>Решения: residual connections, нормализация (BatchNorm/LayerNorm), правильная инициализация весов (Xavier/He)</li></ul><p>На собеседованиях часто просят вывести backprop для простого перцептрона на бумаге — стоит попрактиковаться руками хотя бы раз.</p>",
+      "links": [
+        {
+          "title": "PyTorch: Autograd mechanics",
+          "url": "https://pytorch.org/docs/stable/notes/autograd.html"
+        },
+        {
+          "title": "Backpropagation — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Backpropagation"
+        },
+        {
+          "title": "karpathy: Neural Networks: Zero to Hero",
+          "url": "https://karpathy.ai/zero-to-hero.html"
+        }
+      ]
+    },
+    {
+      "title": "Градиентный спуск: интуиция и варианты",
+      "level": "🟢 Junior",
+      "explanation": "<p>Градиентный спуск — итеративный метод минимизации функции потерь: шаг за шагом двигаемся против направления градиента.</p><pre><code>w = w - lr * grad_w\n</code></pre><table><tr><th>Вариант</th><th>Особенность</th></tr><tr><td>Batch GD</td><td>градиент по всей выборке — точно, но медленно</td></tr><tr><td>SGD</td><td>по одному объекту — шумно, но быстро</td></tr><tr><td>Mini-batch GD</td><td>компромисс, стандарт в глубоком обучении</td></tr><tr><td>Adam</td><td>адаптивный learning rate + momentum, дефолт в большинстве проектов</td></tr></table><p>Ключевой гиперпараметр — learning rate (<code>lr</code>). Слишком большой → расходимость (loss улетает в NaN), слишком маленький → обучение занимает вечность.</p><p>Практика: если видите <code>loss = nan</code> после нескольких шагов — в 80% случаев виноват завышенный lr или отсутствие gradient clipping. Начинайте с <code>lr=1e-3</code> для Adam и подбирайте через LR range test или scheduler (<code>ReduceLROnPlateau</code>, <code>CosineAnnealing</code>).</p>",
+      "links": [
+        {
+          "title": "PyTorch: torch.optim",
+          "url": "https://pytorch.org/docs/stable/optim.html"
+        },
+        {
+          "title": "Adam optimizer paper (arXiv)",
+          "url": "https://arxiv.org/abs/1412.6980"
+        },
+        {
+          "title": "Gradient descent — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Gradient_descent"
+        }
+      ]
+    },
+    {
+      "title": "Вероятность и распределения",
+      "level": "🟢 Junior",
+      "explanation": "<p>Вероятностный взгляд лежит в основе большинства ML-моделей: классификатор предсказывает не класс, а распределение вероятностей по классам.</p><ul><li><b>Нормальное (Гауссово)</b> распределение — фон для многих статистических тестов и инициализации весов</li><li><b>Бернулли/биномиальное</b> — бинарная классификация</li><li><b>Категориальное</b> — многоклассовая классификация (softmax)</li></ul><pre><code>import numpy as np\nfrom scipy import stats\n\nsample = np.random.normal(loc=0, scale=1, size=1000)\nprint(stats.norm.pdf(0))       # плотность в точке 0\nprint(stats.norm.cdf(1.96))    # ~0.975\n</code></pre><p>Softmax превращает вектор логитов в распределение вероятностей:</p><pre><code>def softmax(z):\n    e = np.exp(z - np.max(z))  # вычитаем max для численной стабильности!\n    return e / e.sum()\n</code></pre><p>Забытое вычитание максимума — классический баг: при больших логитах <code>exp()</code> уходит в переполнение (<code>inf</code>), и softmax возвращает NaN.</p>",
+      "links": [
+        {
+          "title": "SciPy: scipy.stats",
+          "url": "https://docs.scipy.org/doc/scipy/reference/stats.html"
+        },
+        {
+          "title": "NumPy: Random sampling",
+          "url": "https://numpy.org/doc/stable/reference/random/index.html"
+        },
+        {
+          "title": "Softmax function — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Softmax_function"
+        }
+      ]
+    },
+    {
+      "title": "Байесовская теорема",
+      "level": "🟡 Middle",
+      "explanation": "<p>Формула Байеса связывает априорную и апостериорную вероятность: <code>P(H|D) = P(D|H) * P(H) / P(D)</code>. Позволяет обновлять убеждения по мере поступления данных.</p><pre><code># Наивный Байес для спам-фильтра (упрощённо)\n# P(spam|word) = P(word|spam)*P(spam) / P(word)\np_spam = 0.3\np_word_given_spam = 0.8\np_word_given_ham = 0.1\np_word = p_word_given_spam*p_spam + p_word_given_ham*(1-p_spam)\np_spam_given_word = (p_word_given_spam * p_spam) / p_word\n</code></pre><ul><li>Основа Naive Bayes классификатора</li><li>Байесовская оптимизация гиперпараметров (Optuna, BoTorch) использует апостериорное распределение для выбора следующей точки поиска</li><li>A/B тестирование: байесовский подход даёт вероятность \"вариант B лучше\", а не просто p-value</li></ul><p>Ловушка на собеседовании — классическая задача про тест на редкую болезнь: даже при точности теста 99% вероятность реального заболевания при положительном результате может быть низкой из-за малой базовой частоты (prior). Всегда считайте через формулу, а не интуитивно.</p>",
+      "links": [
+        {
+          "title": "Bayes' theorem — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Bayes%27_theorem"
+        },
+        {
+          "title": "scikit-learn: Naive Bayes",
+          "url": "https://scikit-learn.org/stable/modules/naive_bayes.html"
+        },
+        {
+          "title": "Optuna docs",
+          "url": "https://optuna.readthedocs.io/"
+        }
+      ]
+    },
+    {
+      "title": "Математическое ожидание и дисперсия",
+      "level": "🟢 Junior",
+      "explanation": "<p>Матожидание <code>E[X]</code> — среднее значение случайной величины с учётом весов вероятности. Дисперсия <code>Var(X) = E[(X-E[X])²]</code> — мера разброса.</p><pre><code>import numpy as np\ndata = np.array([2, 4, 4, 4, 5, 5, 7, 9])\nmean = data.mean()          # E[X]\nvar = data.var()            # смещённая дисперсия (ddof=0)\nvar_unbiased = data.var(ddof=1)  # несмещённая, для выборки\nstd = data.std()\n</code></pre><p>Важное практическое различие: при <code>ddof=0</code> NumPy делит на N (популяционная дисперсия), при <code>ddof=1</code> — на N-1 (выборочная оценка, несмещённая). Для статистических выводов на выборке всегда используйте <code>ddof=1</code>.</p><ul><li>Bias-variance tradeoff: высокая дисперсия модели = переобучение, высокое смещение (bias) = недообучение</li><li>Нормализация признаков (StandardScaler) использует именно среднее и дисперсию: <code>(x - mean) / std</code></li></ul><p>Совет: считайте mean/std только на train-выборке и применяйте к test — иначе получите data leakage.</p>",
+      "links": [
+        {
+          "title": "NumPy: numpy.var / numpy.std",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.var.html"
+        },
+        {
+          "title": "scikit-learn: StandardScaler",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html"
+        },
+        {
+          "title": "Bias–variance tradeoff — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Bias%E2%80%93variance_tradeoff"
+        }
+      ]
+    },
+    {
+      "title": "Статистические тесты (t-test, chi-square)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Статистические тесты позволяют формально проверить, случайно ли различие между группами (например, в A/B-тесте) или оно значимо.</p><pre><code>from scipy import stats\n\ngroup_a = [5.1, 5.5, 5.0, 5.3, 5.2]\ngroup_b = [5.8, 6.0, 5.7, 6.1, 5.9]\nt_stat, p_value = stats.ttest_ind(group_a, group_b)\nprint(p_value)  # если < 0.05 — различие статистически значимо\n</code></pre><ul><li><b>t-test</b> — сравнение средних двух групп</li><li><b>chi-square</b> — проверка независимости категориальных переменных</li><li><b>ANOVA</b> — сравнение более двух групп</li></ul><p>Классическая ошибка — множественное тестирование (multiple comparisons) без поправки (Bonferroni, Benjamini-Hochberg): при проверке 20 гипотез с порогом p&lt;0.05 вы почти гарантированно получите хотя бы один ложноположительный результат.</p><p>В продакшене статистические тесты применяют для проверки дрифта данных (data drift): сравнивают распределение признаков в проде и на train через Kolmogorov-Smirnov тест.</p>",
+      "links": [
+        {
+          "title": "SciPy: scipy.stats.ttest_ind",
+          "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_ind.html"
+        },
+        {
+          "title": "Student's t-test — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Student%27s_t-test"
+        },
+        {
+          "title": "Chi-squared test — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Chi-squared_test"
+        }
+      ]
+    },
+    {
+      "title": "Метод максимального правдоподобия (MLE)",
+      "level": "🔴 Senior",
+      "explanation": "<p>MLE — метод оценки параметров модели, максимизирующий вероятность (правдоподобие) наблюдаемых данных при заданных параметрах.</p><pre><code>import numpy as np\nfrom scipy.optimize import minimize_scalar\n\ndata = np.array([2.1, 1.9, 2.3, 2.0, 2.2])\n\ndef neg_log_likelihood(mu):\n    sigma = 1.0\n    ll = -0.5*np.sum(((data-mu)/sigma)**2)\n    return -ll  # минимизируем отрицательное правдоподобие\n\nres = minimize_scalar(neg_log_likelihood)\nprint(res.x)  # оценка mu ≈ mean(data)\n</code></pre><p>Ключевая связь: минимизация MSE (среднеквадратичной ошибки) в линейной регрессии эквивалентна MLE при предположении о гауссовом шуме. Минимизация кросс-энтропии в классификации — это MLE для категориального распределения.</p><ul><li>MAP (maximum a posteriori) — MLE + prior, добавляет регуляризацию естественным путём (L2 = гауссов prior, L1 = Лапласовский prior)</li></ul><p>На senior-собеседовании часто просят вывести, почему <code>CrossEntropyLoss</code> — это фактически <code>-log P(y|x)</code>, то есть максимизация правдоподобия истинного класса.</p>",
+      "links": [
+        {
+          "title": "Maximum likelihood estimation — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Maximum_likelihood_estimation"
+        },
+        {
+          "title": "SciPy: scipy.optimize.minimize_scalar",
+          "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize_scalar.html"
+        },
+        {
+          "title": "PyTorch: CrossEntropyLoss",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html"
+        }
+      ]
+    },
+    {
+      "title": "Энтропия и Kullback-Leibler дивергенция",
+      "level": "🔴 Senior",
+      "explanation": "<p>Энтропия <code>H(p) = -Σ p(x) log p(x)</code> измеряет неопределённость распределения. KL-дивергенция <code>D_KL(p||q)</code> измеряет, насколько распределение <code>q</code> отличается от истинного <code>p</code>.</p><pre><code>import numpy as np\n\ndef entropy(p):\n    p = p[p > 0]\n    return -np.sum(p * np.log(p))\n\ndef kl_divergence(p, q):\n    mask = p > 0\n    return np.sum(p[mask] * np.log(p[mask] / q[mask]))\n\np = np.array([0.9, 0.1])\nq = np.array([0.6, 0.4])\nprint(entropy(p), kl_divergence(p, q))\n</code></pre><ul><li>Кросс-энтропия = энтропия + KL-дивергенция: <code>H(p,q) = H(p) + D_KL(p||q)</code> — поэтому минимизация cross-entropy loss эквивалентна минимизации KL между истинным и предсказанным распределением</li><li>KL используется в VAE (variational autoencoders), в RLHF (PPO/DPO с KL-штрафом от reference policy) и дистилляции моделей</li></ul><p>Важно помнить: KL-дивергенция несимметрична, <code>D_KL(p||q) ≠ D_KL(q||p)</code> — выбор направления влияет на поведение оптимизации (mode-seeking vs mode-covering).</p>",
+      "links": [
+        {
+          "title": "Kullback–Leibler divergence — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence"
+        },
+        {
+          "title": "Entropy (information theory) — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Entropy_(information_theory)"
+        },
+        {
+          "title": "Auto-Encoding Variational Bayes (VAE paper, arXiv)",
+          "url": "https://arxiv.org/abs/1312.6114"
+        }
+      ]
+    },
+    {
+      "title": "Линейная регрессия как математическая модель",
+      "level": "🟡 Middle",
+      "explanation": "<p>Линейная регрессия ищет веса <code>w</code>, минимизирующие сумму квадратов ошибок <code>||Xw - y||²</code>. Есть точное аналитическое решение через нормальное уравнение:</p><pre><code>import numpy as np\n\nX = np.random.randn(100, 3)\nX_b = np.c_[np.ones((100,1)), X]  # добавляем bias-столбец\ny = X_b @ np.array([1,2,-1,0.5]) + np.random.randn(100)*0.1\n\n# Нормальное уравнение: w = (X^T X)^-1 X^T y\nw = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y\n</code></pre><p>На практике <code>inv()</code> численно нестабильна и медленна при большом числе признаков — вместо неё используют <code>np.linalg.lstsq</code> или градиентный спуск.</p><ul><li>Регуляризация: Ridge (L2) добавляет <code>λ||w||²</code>, Lasso (L1) — <code>λ||w||₁</code> и обнуляет часть весов (feature selection)</li><li>Мультиколлинеарность признаков делает <code>X^T X</code> плохо обусловленной — решение через SVD или регуляризацию</li></ul><p>Совет: даже используя <code>sklearn.linear_model.LinearRegression</code>, полезно понимать, что под капотом — это поможет диагностировать нестабильность коэффициентов при коррелирующих признаках.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Linear Models",
+          "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+        },
+        {
+          "title": "NumPy: numpy.linalg.lstsq",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.linalg.lstsq.html"
+        },
+        {
+          "title": "Linear regression — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Linear_regression"
+        }
+      ]
+    },
+    {
+      "title": "Матричные разложения: SVD и его применение",
+      "level": "🔴 Senior",
+      "explanation": "<p>Singular Value Decomposition раскладывает любую матрицу <code>A = U Σ V^T</code>, где <code>Σ</code> — диагональная матрица сингулярных значений, отражающих \"важность\" направлений.</p><pre><code>import numpy as np\nA = np.random.randn(50, 10)\nU, S, Vt = np.linalg.svd(A, full_matrices=False)\n\n# сжатие: оставляем только k главных компонент\nk = 3\nA_approx = U[:, :k] @ np.diag(S[:k]) @ Vt[:k, :]\n</code></pre><ul><li>PCA математически реализуется через SVD данных, а не через явное вычисление собственных векторов ковариации — это численно стабильнее</li><li>Рекомендательные системы: матричная факторизация рейтингов пользователь-товар через SVD (или его обучаемые аналоги — ALS)</li><li>Сжатие моделей: low-rank approximation весов слоя ускоряет инференс</li><li>LoRA (Low-Rank Adaptation) для fine-tuning больших языковых моделей — теоретическая база именно в низкоранговых разложениях</li></ul><p>Senior-инсайт: если на собеседовании спросят, почему LoRA работает — ответ в том, что изменение весов при fine-tuning часто имеет низкий intrinsic rank, и его можно аппроксимировать произведением двух маленьких матриц вместо полного дообучения.</p>",
+      "links": [
+        {
+          "title": "NumPy: numpy.linalg.svd",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.linalg.svd.html"
+        },
+        {
+          "title": "LoRA paper (arXiv)",
+          "url": "https://arxiv.org/abs/2106.09685"
+        },
+        {
+          "title": "Hugging Face: PEFT docs",
+          "url": "https://huggingface.co/docs/peft/index"
+        },
+        {
+          "title": "Singular value decomposition — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Singular_value_decomposition"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что вычисляет операция a @ b для двух векторов NumPy?",
+      "options": [
+        "Поэлементное умножение",
+        "Скалярное (dot) произведение",
+        "Конкатенацию векторов",
+        "Норму разности"
+      ],
+      "answer": 1,
+      "explain": "Оператор @ в NumPy — это матричное/скалярное умножение, в отличие от * (поэлементное)."
+    },
+    {
+      "q": "Почему для симметричных матриц (например, ковариации) предпочтительнее np.linalg.eigh, а не np.linalg.eig?",
+      "options": [
+        "eigh работает только с целыми числами",
+        "eigh быстрее и численно стабильнее для симметричных матриц",
+        "eig устарел и удалён из NumPy",
+        "Разницы нет, это синонимы"
+      ],
+      "answer": 1,
+      "explain": "eigh специально оптимизирован под симметричные/эрмитовы матрицы и гарантирует вещественные собственные значения."
+    },
+    {
+      "q": "Что произойдёт, если забыть вызвать optimizer.zero_grad() перед loss.backward() в PyTorch?",
+      "options": [
+        "Программа упадёт с ошибкой",
+        "Градиенты будут накапливаться между итерациями",
+        "Модель обучится быстрее",
+        "Ничего, PyTorch делает это автоматически"
+      ],
+      "answer": 1,
+      "explain": "PyTorch по умолчанию накапливает градиенты в .grad, поэтому без обнуления они суммируются между шагами, искажая обучение."
+    },
+    {
+      "q": "Какая проблема возникает при обучении очень глубоких сетей из-за chain rule, если производные слоёв меньше 1?",
+      "options": [
+        "Exploding gradients",
+        "Vanishing gradients",
+        "Overfitting",
+        "Data leakage"
+      ],
+      "answer": 1,
+      "explain": "Перемножение множества маленьких производных (<1) экспоненциально уменьшает градиент к первым слоям — vanishing gradients."
+    },
+    {
+      "q": "Зачем в функции softmax вычитают np.max(z) перед экспонентой?",
+      "options": [
+        "Для ускорения вычислений",
+        "Для численной стабильности и предотвращения переполнения exp()",
+        "Это требование по стандарту NumPy",
+        "Чтобы сумма вероятностей была больше 1"
+      ],
+      "answer": 1,
+      "explain": "Без вычитания максимума большие логиты дают exp(large)=inf, и результат становится NaN."
+    },
+    {
+      "q": "Наивный Байес классификатор основан на:",
+      "options": [
+        "Градиентном спуске",
+        "Теореме Байеса и предположении о независимости признаков",
+        "Матричном разложении SVD",
+        "Chain rule для backpropagation"
+      ],
+      "answer": 1,
+      "explain": "Naive Bayes использует формулу Байеса, наивно предполагая условную независимость признаков друг от друга."
+    },
+    {
+      "q": "Чем отличается data.var(ddof=0) от data.var(ddof=1) в NumPy?",
+      "options": [
+        "ddof=1 считает медиану вместо среднего",
+        "ddof=0 делит на N, ddof=1 делит на N-1 (несмещённая оценка)",
+        "Они дают одинаковый результат всегда",
+        "ddof=1 применим только к целым числам"
+      ],
+      "answer": 1,
+      "explain": "ddof=1 даёт несмещённую оценку дисперсии выборки (деление на N-1), что важно при статистических выводах."
+    },
+    {
+      "q": "Минимизация MSE в линейной регрессии математически эквивалентна:",
+      "options": [
+        "Минимизации энтропии",
+        "MLE при предположении о гауссовом шуме в данных",
+        "Байесовской теореме напрямую",
+        "SVD разложению матрицы признаков"
+      ],
+      "answer": 1,
+      "explain": "При гауссовом шуме максимизация правдоподобия (MLE) сводится ровно к минимизации суммы квадратов ошибок (MSE)."
+    },
+    {
+      "q": "Что отличает KL-дивергенцию D_KL(p||q) от обычной метрики расстояния?",
+      "options": [
+        "Она всегда отрицательна",
+        "Она несимметрична: D_KL(p||q) ≠ D_KL(q||p)",
+        "Она определена только для дискретных распределений",
+        "Она равна нулю всегда, если p и q разные"
+      ],
+      "answer": 1,
+      "explain": "KL-дивергенция не является метрикой в строгом смысле именно из-за несимметричности, что влияет на выбор направления в задачах вроде VAE."
+    },
+    {
+      "q": "На чём математически основан метод LoRA для fine-tuning больших языковых моделей?",
+      "options": [
+        "Градиентном клиппинге",
+        "Низкоранговом разложении (low-rank) изменения весов",
+        "Байесовской оптимизации гиперпараметров",
+        "Chi-square тестах на дрифт данных"
+      ],
+      "answer": 1,
+      "explain": "LoRA аппроксимирует изменение весов при fine-tuning произведением двух маленьких low-rank матриц, опираясь на идеи SVD/низкорангового разложения."
+    }
+  ]
+}

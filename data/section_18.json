@@ -1,0 +1,208 @@
+{
+  "phase": "Phase 5 — MLOps & Production",
+  "section": "💡 Фишки и лайфхаки",
+  "topics": [
+    {
+      "title": "Ускорение pandas в 10 раз",
+      "level": "🟡 Middle",
+      "explanation": "<p>Классический pandas часто становится узким местом на больших датафреймах, но простые приёмы дают ускорение в разы без смены библиотеки.</p><ul><li>Используй <code>dtype</code> явно: <code>category</code> для строковых колонок с малым числом уникальных значений экономит память в разы.</li><li>Векторизация вместо <code>.apply()</code> и уж тем более циклов <code>for</code> — операции над колонками целиком в разы быстрее.</li><li><code>df.query()</code> и <code>eval()</code> используют numexpr под капотом и ускоряют арифметику на больших таблицах.</li><li>Читай CSV с <code>usecols</code>, <code>dtype</code> и <code>chunksize</code>, чтобы не грузить лишнее в память.</li><li>Для по-настоящему больших данных переключайся на <b>Polars</b> (Rust, ленивые вычисления, мультипоточность из коробки) или <b>DuckDB</b> для SQL-запросов прямо по parquet-файлам.</li></ul><pre><code># было медленно\ndf['x2'] = df['x'].apply(lambda v: v ** 2)\n# стало быстро\ndf['x2'] = df['x'] ** 2</code></pre><p>Профилируй перед оптимизацией: <code>%timeit</code> в Jupyter или <code>line_profiler</code> покажут реальное узкое место.</p>",
+      "links": [
+        {"title": "Pandas: Enhancing performance", "url": "https://pandas.pydata.org/docs/user_guide/enhancingperf.html"},
+        {"title": "Polars — User Guide", "url": "https://docs.pola.rs/"},
+        {"title": "DuckDB documentation", "url": "https://duckdb.org/docs/"}
+      ]
+    },
+    {
+      "title": "Отладка CUDA Out Of Memory",
+      "level": "🟡 Middle",
+      "explanation": "<p>OOM на GPU — один из самых частых практических факапов при обучении моделей. Есть проверенный чек-лист диагностики и починки.</p><ul><li>Первым делом смотри <code>nvidia-smi</code> — сколько памяти реально занято и кем (иногда это зомби-процесс от прошлого запуска).</li><li>Уменьши <code>batch_size</code> и компенсируй через <code>gradient_accumulation_steps</code> — эффективный батч не меняется, память падает.</li><li>Включи <b>mixed precision</b> (<code>torch.cuda.amp</code> или <code>bf16</code>) — экономия памяти почти в 2 раза.</li><li><b>Gradient checkpointing</b> обменивает вычисления на память — критично для трансформеров.</li><li>Чисти кэш аккуратно: <code>torch.cuda.empty_cache()</code> не освобождает память ОС, а лишь дефрагментирует пул PyTorch.</li><li>Используй <code>torch.cuda.memory_summary()</code> для точной картины по аллокациям.</li></ul><pre><code>import torch\nprint(torch.cuda.memory_summary())\ntorch.cuda.empty_cache()</code></pre><p>Если модель не влезает даже в batch_size=1 — нужен offloading (DeepSpeed ZeRO, accelerate) или квантизация весов.</p>",
+      "links": [
+        {"title": "PyTorch: Memory management", "url": "https://pytorch.org/docs/stable/notes/cuda.html#memory-management"},
+        {"title": "HuggingFace: Efficient training on a single GPU", "url": "https://huggingface.co/docs/transformers/perf_train_gpu_one"},
+        {"title": "DeepSpeed ZeRO", "url": "https://www.deepspeed.ai/tutorials/zero/"}
+      ]
+    },
+    {
+      "title": "Seed и воспроизводимость экспериментов",
+      "level": "🟢 Junior",
+      "explanation": "<p>Без фиксации сидов результаты экспериментов не воспроизводятся, а сравнение моделей превращается в гадание. Нужно зафиксировать рандом на всех уровнях.</p><ul><li>Python, NumPy, PyTorch/TensorFlow имеют независимые генераторы случайных чисел — фиксируй каждый.</li><li>На GPU полная детерминированность требует отключения некоторых оптимизаций cuDNN (жертвуешь скоростью ради воспроизводимости).</li><li>DataLoader с несколькими воркерами тоже нужно детерминировать через <code>worker_init_fn</code>.</li><li>Помимо сида, фиксируй версии библиотек (<code>requirements.txt</code> / <code>poetry.lock</code>) и данные (хэш датасета или DVC).</li></ul><pre><code>import random, numpy as np, torch\n\ndef set_seed(seed=42):\n    random.seed(seed)\n    np.random.seed(seed)\n    torch.manual_seed(seed)\n    torch.cuda.manual_seed_all(seed)\n    torch.backends.cudnn.deterministic = True\n    torch.backends.cudnn.benchmark = False</code></pre><p>Полная бит-в-бит воспроизводимость на GPU почти недостижима из-за недетерминированных ядер — фиксируйся на «воспроизводимость метрик в пределах погрешности».</p>",
+      "links": [
+        {"title": "PyTorch: Reproducibility", "url": "https://pytorch.org/docs/stable/notes/randomness.html"},
+        {"title": "scikit-learn: Controlling randomness", "url": "https://scikit-learn.org/stable/common_pitfalls.html#controlling-randomness"},
+        {"title": "DVC — Data Version Control", "url": "https://dvc.org/doc"}
+      ]
+    },
+    {
+      "title": "Быстрый прототип на Streamlit / Gradio",
+      "level": "🟢 Junior",
+      "explanation": "<p>Чтобы показать модель заказчику или коллеге, не нужен фронтенд-разработчик — Streamlit и Gradio позволяют собрать демо за 15 минут.</p><ul><li><b>Streamlit</b> — декларативный подход, весь скрипт перерисовывается сверху вниз при каждом взаимодействии, удобен для дашбордов и multi-page приложений.</li><li><b>Gradio</b> — заточен под ML-демо конкретной функции (вход → выход), одной строкой деплоится в HuggingFace Spaces с публичной ссылкой.</li><li>Кэшируй тяжёлые операции: <code>@st.cache_resource</code> для загрузки модели, чтобы она не переинициализировалась на каждый клик.</li><li>Для быстрого шаринга без деплоя используй <code>gr.Interface(...).launch(share=True)</code> — временная публичная ссылка на 72 часа.</li></ul><pre><code>import gradio as gr\n\ndef predict(text):\n    return model(text)\n\ngr.Interface(fn=predict, inputs=\"text\", outputs=\"label\").launch(share=True)</code></pre><p>Для продакшена такие демо не годятся — там нужен настоящий бэкенд с очередями и мониторингом, но для validation идеи это золотой стандарт.</p>",
+      "links": [
+        {"title": "Streamlit docs", "url": "https://docs.streamlit.io/"},
+        {"title": "Gradio docs", "url": "https://www.gradio.app/docs"},
+        {"title": "HuggingFace Spaces", "url": "https://huggingface.co/docs/hub/spaces"}
+      ]
+    },
+    {
+      "title": "Дешёвый GPU: Colab, Kaggle, vast.ai",
+      "level": "🟢 Junior",
+      "explanation": "<p>Не обязательно покупать GPU или платить за AWS по полной цене — есть проверенные способы получить вычисления дёшево или бесплатно.</p><ul><li><b>Google Colab</b> — бесплатный T4 с ограничениями по времени сессии, Colab Pro/Pro+ даёт A100/L4 и дольше держит сессию.</li><li><b>Kaggle Notebooks</b> — 30 часов GPU в неделю бесплатно (P100/T4x2), плюс бесплатный TPU.</li><li><b>vast.ai</b> и <b>RunPod</b> — маркетплейсы GPU от частных владельцев, в разы дешевле AWS/GCP, но менее надёжны (spot-инстансы могут прерваться).</li><li><b>Lambda Labs</b> — специализированные ML-инстансы по конкурентной цене.</li><li>Всегда сохраняй чекпоинты на внешнее хранилище (Google Drive, S3, HF Hub) — spot-инстанс может исчезнуть в любой момент.</li></ul><pre><code># быстрый маунт Google Drive в Colab\nfrom google.colab import drive\ndrive.mount('/content/drive')</code></pre><p>Для долгих экспериментов считай total cost of ownership: дешёвый GPU с частыми обрывами может выйти дороже из-за потерянного времени на перезапуски.</p>",
+      "links": [
+        {"title": "Google Colab", "url": "https://colab.research.google.com/"},
+        {"title": "Kaggle Notebooks docs", "url": "https://www.kaggle.com/docs/notebooks"},
+        {"title": "vast.ai", "url": "https://vast.ai/"}
+      ]
+    },
+    {
+      "title": "Кэширование эмбеддингов",
+      "level": "🟡 Middle",
+      "explanation": "<p>Пересчёт эмбеддингов одних и тех же текстов на каждый запрос — типичная растрата денег и времени. Кэш решает это элегантно.</p><ul><li>Хэшируй входной текст (например, SHA-256) и используй как ключ в key-value хранилище (Redis, SQLite, локальный dict).</li><li>Для RAG-систем эмбеддинги документов кэшируй навсегда — пересчитывай только при изменении контента (сверяй хэш чанка).</li><li>Векторные БД (Chroma, Qdrant, pgvector) сами являются постоянным кэшем — не пересоздавай индекс с нуля при каждом запуске.</li><li>Для LLM-эмбеддингов через API (OpenAI, Cohere) кэш экономит реальные деньги при повторяющихся запросах в дев-цикле.</li></ul><pre><code>import hashlib, functools\n\n@functools.lru_cache(maxsize=10000)\ndef embed_cached(text: str):\n    return embedding_model.encode(text)\n\n# для персистентности между запусками — на диск\nkey = hashlib.sha256(text.encode()).hexdigest()</code></pre><p>Помни про инвалидацию: если сменил модель эмбеддингов, версионируй ключи кэша (добавь имя модели в хэш), иначе получишь несовместимые вектора.</p>",
+      "links": [
+        {"title": "LangChain: CacheBackedEmbeddings", "url": "https://python.langchain.com/docs/how_to/caching_embeddings/"},
+        {"title": "Redis as a vector database", "url": "https://redis.io/docs/latest/develop/get-started/vector-database/"},
+        {"title": "Qdrant documentation", "url": "https://qdrant.tech/documentation/"}
+      ]
+    },
+    {
+      "title": "Промпт-паттерны, которые реально работают",
+      "level": "🟡 Middle",
+      "explanation": "<p>Есть небольшой набор промпт-техник, которые многократно подтверждены на практике и в статьях, в отличие от «магических» формулировок из соцсетей.</p><ul><li><b>Few-shot</b> — 2-5 качественных примеров формата ввода-вывода почти всегда лучше нуля примеров.</li><li><b>Chain-of-Thought</b> — просьба «рассуждай пошагово» заметно улучшает точность на задачах с логикой и арифметикой.</li><li><b>Явная структура вывода</b> — задавай JSON-схему или XML-теги, это снижает вариативность и упрощает парсинг.</li><li><b>Разделение ролей</b> — system-промпт для правил поведения, user — для задачи, это снижает prompt injection и путаницу.</li><li><b>Self-consistency</b> — несколько независимых генераций + голосование повышает надёжность на сложных задачах.</li></ul><pre><code>SYSTEM: Ты отвечаешь только валидным JSON по схеме {\"answer\": str, \"confidence\": float}.\nUSER: Реши задачу пошагово, затем выведи финальный JSON.</code></pre><p>Избегай культа «идеального промпта» — для продакшена важнее eval-датасет, на котором можно объективно сравнить варианты промптов.</p>",
+      "links": [
+        {"title": "Anthropic: Prompt engineering overview", "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview"},
+        {"title": "OpenAI: Prompt engineering guide", "url": "https://platform.openai.com/docs/guides/prompt-engineering"},
+        {"title": "Chain-of-Thought Prompting (Wei et al., 2022)", "url": "https://arxiv.org/abs/2201.11903"}
+      ]
+    },
+    {
+      "title": "Экономия на API-токенах LLM",
+      "level": "🟡 Middle",
+      "explanation": "<p>Счета за LLM API растут быстро при масштабировании — есть набор практических приёмов снижения расходов без потери качества.</p><ul><li><b>Prompt caching</b> (Anthropic, OpenAI) — повторяющийся системный промпт или контекст кэшируется провайдером и стоит в разы дешевле.</li><li>Выбирай модель под задачу: не гоняй простую классификацию через флагманскую модель — маленькие модели (Haiku, GPT-4o-mini) справляются дешевле и быстрее.</li><li>Сокращай контекст: обрезай историю диалога, суммаризируй старые сообщения вместо хранения полного лога.</li><li>Батчинг через Batch API (скидка до 50%) для несрочных офлайн-задач.</li><li>Считай токены заранее через токенайзер (<code>tiktoken</code>, <code>anthropic.count_tokens</code>), чтобы не превышать бюджет на этапе разработки промпта.</li></ul><pre><code>import tiktoken\nenc = tiktoken.encoding_for_model(\"gpt-4o\")\nprint(len(enc.encode(prompt)))</code></pre><p>Мониторь стоимость по фичам, а не только по общему счёту — часто 90% расходов даёт одна неоптимальная фича (например, полное сканирование документа при каждом запросе).</p>",
+      "links": [
+        {"title": "Anthropic: Prompt caching", "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"},
+        {"title": "OpenAI: Batch API", "url": "https://platform.openai.com/docs/guides/batch"},
+        {"title": "tiktoken (OpenAI tokenizer)", "url": "https://github.com/openai/tiktoken"}
+      ]
+    },
+    {
+      "title": "Малоизвестные хаки Hugging Face",
+      "level": "🟡 Middle",
+      "explanation": "<p>Экосистема HF гораздо богаче, чем базовый <code>pipeline()</code> — знание нескольких трюков экономит часы работы.</p><ul><li><code>device_map=\"auto\"</code> в <code>from_pretrained</code> автоматически распределяет слои модели между GPU/CPU, если модель не влезает целиком.</li><li><code>datasets</code> с <code>streaming=True</code> позволяет работать с датасетами в терабайты без скачивания на диск.</li><li><code>accelerate estimate-memory</code> заранее покажет, сколько памяти потребует модель до попытки загрузки.</li><li>Загрузка в 4/8-бит через <code>bitsandbytes</code> (<code>load_in_4bit=True</code>) сжимает большие модели в разы для инференса на потребительском GPU.</li><li>HF Hub умеет версионировать модели и датасеты через git-подобные revisions — можно закрепиться на конкретном коммите модели для воспроизводимости.</li></ul><pre><code>from transformers import AutoModelForCausalLM\n\nmodel = AutoModelForCausalLM.from_pretrained(\n    \"model_name\", device_map=\"auto\", load_in_4bit=True\n)</code></pre><p>Проверяй лицензии моделей на Hub — не все permissive, некоторые запрещают коммерческое использование.</p>",
+      "links": [
+        {"title": "HuggingFace: Big model inference", "url": "https://huggingface.co/docs/accelerate/usage_guides/big_modeling"},
+        {"title": "HuggingFace: Quantization with bitsandbytes", "url": "https://huggingface.co/docs/transformers/quantization/bitsandbytes"},
+        {"title": "HuggingFace: Streaming datasets", "url": "https://huggingface.co/docs/datasets/stream"}
+      ]
+    },
+    {
+      "title": "Малоизвестные возможности scikit-learn",
+      "level": "🟡 Middle",
+      "explanation": "<p>Многие используют sklearn только для <code>fit/predict</code>, упуская мощные встроенные инструменты для продакшн-пайплайнов.</p><ul><li><code>Pipeline</code> + <code>ColumnTransformer</code> объединяют препроцессинг и модель в один сериализуемый объект — предотвращает data leakage и упрощает деплой.</li><li><code>class_weight=\"balanced\"</code> автоматически компенсирует дисбаланс классов без ручного oversampling.</li><li><code>HalvingGridSearchCV</code> — успешный последовательный отбор гиперпараметров, кратно быстрее полного <code>GridSearchCV</code>.</li><li><code>partial_fit</code> у ряда моделей (SGD, MiniBatchKMeans) позволяет обучаться на потоке данных, не помещающихся в память.</li><li><code>set_config(transform_output=\"pandas\")</code> заставляет трансформеры возвращать DataFrame вместо numpy-массива — удобно для отладки.</li></ul><pre><code>from sklearn.pipeline import Pipeline\nfrom sklearn.compose import ColumnTransformer\n\npipe = Pipeline([\n    (\"prep\", ColumnTransformer([...])),\n    (\"model\", RandomForestClassifier(class_weight=\"balanced\"))\n])\npipe.fit(X_train, y_train)</code></pre><p>Сохраняй весь Pipeline через <code>joblib.dump</code> — это гарантирует, что препроцессинг в проде идентичен обучению.</p>",
+      "links": [
+        {"title": "scikit-learn: Pipelines and composite estimators", "url": "https://scikit-learn.org/stable/modules/compose.html"},
+        {"title": "scikit-learn: Tuning the hyper-parameters", "url": "https://scikit-learn.org/stable/modules/grid_search.html"},
+        {"title": "scikit-learn: set_output API", "url": "https://scikit-learn.org/stable/auto_examples/miscellaneous/plot_set_output.html"}
+      ]
+    },
+    {
+      "title": "Инструменты продуктивности: ruff, pre-commit, nbdev",
+      "level": "🟢 Junior",
+      "explanation": "<p>Правильно настроенные инструменты автоматизации экономят часы код-ревью и ловят баги до пуша.</p><ul><li><b>ruff</b> — линтер и форматтер на Rust, заменяет flake8 + isort + часть black, работает в 10-100 раз быстрее аналогов.</li><li><b>pre-commit</b> — фреймворк git-хуков: автоматически прогоняет линтеры, форматтеры и проверки секретов перед каждым коммитом.</li><li><b>nbdev</b> — превращает Jupyter-ноутбуки в полноценный python-пакет с тестами и документацией, решая проблему «грязных» ноутбуков в продакшене.</li><li><b>nbstripout</b> — убирает output-ячейки из ноутбуков перед коммитом, чтобы не засорять git-историю бинарными diff'ами.</li></ul><pre><code># .pre-commit-config.yaml\nrepos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    rev: v0.6.0\n    hooks:\n      - id: ruff\n        args: [--fix]</code></pre><p>Настрой эти инструменты один раз в шаблоне проекта (cookiecutter) — и каждый новый ML-репозиторий будет чистым с первого коммита.</p>",
+      "links": [
+        {"title": "Ruff documentation", "url": "https://docs.astral.sh/ruff/"},
+        {"title": "pre-commit.com", "url": "https://pre-commit.com/"},
+        {"title": "nbdev by fast.ai", "url": "https://nbdev.fast.ai/"}
+      ]
+    },
+    {
+      "title": "Как быстро читать чужие ML-репозитории",
+      "level": "🔴 Senior",
+      "explanation": "<p>Умение быстро разобраться в незнакомом ML-репозитории (research code, opensource либа) — навык, который сильно ускоряет работу senior-инженера.</p><ul><li>Начинай с <code>README</code> и <code>train.py</code>/<code>main.py</code> — точки входа сразу показывают архитектуру пайплайна.</li><li>Найди файл конфигурации (YAML/Hydra) — он часто описывает весь пайплайн декларативно лучше любого README.</li><li>Ищи класс модели через grep по <code>nn.Module</code> или <code>forward(</code> — это ядро репозитория.</li><li>Смотри на тесты (если есть) — они лучший источник примеров использования API.</li><li>Используй граф зависимостей IDE (Go to definition / Find references) вместо линейного чтения файлов сверху вниз.</li><li>Запусти код на минимальном примере (toy dataset) под дебаггером — трассировка вызовов быстрее статического чтения.</li></ul><pre><code># быстро найти определение модели\ngrep -rn \"class.*nn.Module\" src/</code></pre><p>Не пытайся понять 100% кода сразу — определи «горячий путь» (forward pass + loss) и разбирайся вглубь только там, где это нужно для твоей задачи.</p>",
+      "links": [
+        {"title": "Karpathy: A Recipe for Training Neural Networks", "url": "https://karpathy.github.io/2019/04/25/recipe/"},
+        {"title": "Hydra — configuration framework", "url": "https://hydra.cc/docs/intro/"},
+        {"title": "Papers with Code", "url": "https://paperswithcode.com/"}
+      ]
+    },
+    {
+      "title": "Как быстро читать arxiv-статьи",
+      "level": "🟡 Middle",
+      "explanation": "<p>ML-инженеру приходится просматривать десятки статей в неделю — линейное чтение от начала до конца не масштабируется.</p><ul><li>Метод трёх проходов: 1) заголовок, абстракт, выводы, рисунки — 5 минут; 2) введение и заключение целиком, остальное бегло — 15 минут; 3) полное вдумчивое чтение только если статья прошла первые два фильтра.</li><li>Сначала смотри на рисунки и таблицы результатов — часто это даёт 80% сути статьи без чтения текста.</li><li>Проверяй раздел Limitations/Related Work — там честно написано, чем метод хуже конкурентов.</li><li>Используй ArXiv Sanity, Semantic Scholar или ChatPaper для быстрого саммари и поиска связанных работ.</li><li>Следи не за отдельными статьями, а за авторами и лабораториями, которые стабильно выпускают качественные работы в твоей нише.</li></ul><p>Держи личную базу заметок (Notion/Obsidian) с однострочным summary каждой прочитанной статьи — это окупается уже через месяц активного чтения.</p>",
+      "links": [
+        {"title": "How to Read a Paper (S. Keshav)", "url": "https://web.stanford.edu/class/cs224n/readings/how_to_read_a_paper.pdf"},
+        {"title": "Semantic Scholar", "url": "https://www.semanticscholar.org/"},
+        {"title": "arxiv-sanity-lite (Karpathy)", "url": "https://github.com/karpathy/arxiv-sanity-lite"}
+      ]
+    },
+    {
+      "title": "Профилирование и бенчмаркинг ML-кода",
+      "level": "🔴 Senior",
+      "explanation": "<p>Оптимизация вслепую — трата времени. Прежде чем ускорять код, нужно точно измерить, где узкое место: данные, GPU-compute или Python-оверхед.</p><ul><li><code>torch.profiler</code> показывает время по операциям и загрузку GPU/CPU с визуализацией в TensorBoard.</li><li><code>py-spy</code> позволяет профилировать работающий процесс без изменения кода, включая C-расширения.</li><li>Проверяй GPU utilization через <code>nvidia-smi dmon</code> — если она стабильно ниже 80%, узкое место чаще всего в DataLoader (I/O или препроцессинг на CPU).</li><li>Увеличение <code>num_workers</code> и <code>pin_memory=True</code> в DataLoader часто даёт больше прироста, чем оптимизация самой модели.</li><li>Всегда сравнивай до/после на одинаковом железе и фиксированном сиде — иначе шум измерений исказит выводы.</li></ul><pre><code>from torch.profiler import profile, ProfilerActivity\n\nwith profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:\n    model(inputs)\nprint(prof.key_averages().table(sort_by=\"cuda_time_total\"))</code></pre><p>Правило: сначала профилируй, потом оптимизируй — иначе легко потратить день на ускорение кода, который занимает 2% времени выполнения.</p>",
+      "links": [
+        {"title": "PyTorch Profiler", "url": "https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html"},
+        {"title": "py-spy", "url": "https://github.com/benfred/py-spy"},
+        {"title": "PyTorch: Data loading best practices", "url": "https://pytorch.org/docs/stable/data.html#data-loading-order-and-sampler"}
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что даёт наибольший практический выигрыш при ускорении pandas-кода на больших данных?",
+      "options": ["Замена print на logging", "Векторизация вместо .apply() и циклов", "Увеличение количества комментариев", "Импорт pandas дважды"],
+      "answer": 1,
+      "explain": "Векторные операции над колонками используют оптимизированный C-код под капотом и на порядки быстрее построчных .apply() и циклов."
+    },
+    {
+      "q": "Какой приём НЕ помогает при ошибке CUDA Out Of Memory?",
+      "options": ["Уменьшение batch_size с gradient accumulation", "Включение mixed precision (fp16/bf16)", "Увеличение learning rate в 10 раз", "Gradient checkpointing"],
+      "answer": 2,
+      "explain": "Learning rate влияет на сходимость обучения, но никак не связан с потреблением памяти GPU."
+    },
+    {
+      "q": "Почему полная бит-в-бит воспроизводимость на GPU часто недостижима даже при фиксации всех сидов?",
+      "options": ["GPU не поддерживает float32", "Некоторые ядра cuDNN недетерминированы по умолчанию", "Python не умеет фиксировать сиды", "NumPy не связан с PyTorch"],
+      "answer": 1,
+      "explain": "Часть CUDA/cuDNN операций использует недетерминированные алгоритмы ради скорости; для полной детерминированности их нужно явно отключать, жертвуя производительностью."
+    },
+    {
+      "q": "Чем Gradio принципиально отличается от Streamlit в типичном сценарии использования?",
+      "options": ["Gradio требует обязательной оплаты", "Gradio заточен под демо функции вход→выход и легко деплоится в HF Spaces", "Streamlit не поддерживает Python", "Gradio не умеет работать с текстом"],
+      "answer": 1,
+      "explain": "Gradio исторически специализирован на быстрых ML-демо одной функции с готовой интеграцией в Hugging Face Spaces, тогда как Streamlit лучше подходит для многостраничных дашбордов."
+    },
+    {
+      "q": "Какой сервис даёт около 30 часов бесплатного GPU в неделю без подписки?",
+      "options": ["AWS EC2", "Kaggle Notebooks", "Azure ML Studio Enterprise", "vast.ai по умолчанию"],
+      "answer": 1,
+      "explain": "Kaggle предоставляет бесплатную квоту GPU/TPU часов в неделю без необходимости оплаты, в отличие от AWS и Azure."
+    },
+    {
+      "q": "Зачем при кэшировании эмбеддингов включать имя модели в ключ кэша?",
+      "options": ["Это требование лицензии", "Чтобы ускорить хэширование текста", "Чтобы избежать использования несовместимых векторов от разных моделей", "Так требует Redis"],
+      "answer": 2,
+      "explain": "Эмбеддинги разных моделей несовместимы по размерности и семантике пространства, поэтому смена модели без версионирования ключа приведёт к тихим ошибкам."
+    },
+    {
+      "q": "Что из перечисленного является подтверждённой практикой, а не мифом о промптинге?",
+      "options": ["Обещание чаевых модели повышает точность на 100%", "Chain-of-Thought инструкция улучшает результаты на задачах с рассуждением", "Промпт должен быть написан заглавными буквами", "Длина промпта всегда прямо пропорциональна качеству"],
+      "answer": 1,
+      "explain": "Chain-of-Thought prompting подтверждён исследованиями (Wei et al., 2022) как эффективный способ улучшить точность на задачах, требующих пошагового рассуждения."
+    },
+    {
+      "q": "Какой механизм провайдеров LLM API позволяет заметно снизить стоимость при повторяющемся системном промпте?",
+      "options": ["Batch API исключительно для realtime задач", "Prompt caching", "Увеличение temperature", "Отключение stop-последовательностей"],
+      "answer": 1,
+      "explain": "Prompt caching позволяет провайдеру переиспользовать вычисления для неизменной части промпта, снижая стоимость и задержку повторных запросов."
+    },
+    {
+      "q": "Для чего нужен параметр device_map=\"auto\" в HuggingFace transformers?",
+      "options": ["Автоматически подбирает learning rate", "Автоматически распределяет слои модели между доступными GPU/CPU при нехватке памяти", "Включает квантизацию по умолчанию", "Меняет токенайзер модели"],
+      "answer": 1,
+      "explain": "device_map=\"auto\" использует accelerate для распределения слоёв большой модели по доступным устройствам, если она не помещается целиком в одну видеокарту."
+    },
+    {
+      "q": "Какой инструмент из экосистемы sklearn/линтеров написан на Rust и заметно быстрее классических аналогов?",
+      "options": ["flake8", "black", "ruff", "isort"],
+      "answer": 2,
+      "explain": "Ruff написан на Rust и совмещает функциональность flake8, isort и части black, работая на порядки быстрее чисто-питоновских линтеров."
+    }
+  ]
+}

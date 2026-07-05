@@ -1,0 +1,384 @@
+{
+  "phase": "Phase 2 — Classical ML",
+  "section": "🧩 Unsupervised Learning",
+  "topics": [
+    {
+      "title": "Введение в unsupervised learning",
+      "level": "🟢 Junior",
+      "explanation": "<p>Обучение без учителя ищет структуру в данных <b>без разметки</b>: группы (кластеризация), сжатое представление (снижение размерности) или аномалии. В отличие от supervised, нет чёткой метрики качества «из коробки» — часто оценка субъективна или задаётся косвенно.</p><ul><li>Кластеризация: k-means, DBSCAN, иерархическая</li><li>Снижение размерности: PCA, t-SNE, UMAP</li><li>Детекция аномалий: Isolation Forest, LOF</li><li>Матричные разложения: SVD, NMF для рекомендаций</li></ul><p>Типичная ошибка новичков — забывать <code>StandardScaler</code> перед кластеризацией/PCA: признаки в разных масштабах ломают расстояния.</p><pre><code>from sklearn.preprocessing import StandardScaler\nX_scaled = StandardScaler().fit_transform(X)</code></pre><p>Совет: всегда визуализируйте данные до и после — unsupervised методы легко дают красивый, но бессмысленный результат.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Unsupervised learning",
+          "url": "https://scikit-learn.org/stable/unsupervised_learning.html"
+        },
+        {
+          "title": "Wikipedia: Unsupervised learning",
+          "url": "https://en.wikipedia.org/wiki/Unsupervised_learning"
+        },
+        {
+          "title": "scikit-learn: preprocessing",
+          "url": "https://scikit-learn.org/stable/modules/preprocessing.html"
+        }
+      ]
+    },
+    {
+      "title": "K-Means: алгоритм и реализация",
+      "level": "🟢 Junior",
+      "explanation": "<p>K-means минимизирует сумму квадратов расстояний до центроидов (inertia). Алгоритм Ллойда: инициализация центроидов → назначение точек ближайшему центроиду → пересчёт центроидов → повтор до сходимости.</p><pre><code>from sklearn.cluster import KMeans\nkm = KMeans(n_clusters=3, n_init=10, random_state=42)\nlabels = km.fit_predict(X_scaled)\nprint(km.inertia_, km.cluster_centers_)</code></pre><ul><li>Чувствителен к инициализации — используйте <code>init='k-means++'</code> (по умолчанию)</li><li>Предполагает сферические кластеры одинакового размера — плохо работает на вытянутых/неравных по плотности группах</li><li>Требует заранее знать k</li></ul><table><tr><th>Плюс</th><th>Минус</th></tr><tr><td>Быстрый, O(n·k·i)</td><td>Чувствителен к выбросам</td></tr><tr><td>Простая интерпретация</td><td>Только выпуклые кластеры</td></tr></table><p>Продакшен-совет: запускайте с <code>n_init</code>&gt;1, иначе можно попасть в плохой локальный минимум и получить нестабильные результаты между запусками.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: KMeans",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html"
+        },
+        {
+          "title": "scikit-learn: Clustering guide",
+          "url": "https://scikit-learn.org/stable/modules/clustering.html"
+        },
+        {
+          "title": "Wikipedia: k-means clustering",
+          "url": "https://en.wikipedia.org/wiki/K-means_clustering"
+        }
+      ]
+    },
+    {
+      "title": "Выбор числа кластеров (elbow, silhouette)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Метод локтя (elbow method) строит инерцию от k и ищет точку перегиба — субъективно и часто неоднозначно. Более надёжна <b>silhouette score</b>: оценивает, насколько точка ближе к своему кластеру, чем к соседнему (диапазон -1..1).</p><pre><code>from sklearn.metrics import silhouette_score\nscores = {}\nfor k in range(2, 10):\n    km = KMeans(n_clusters=k, n_init=10, random_state=0).fit(X)\n    scores[k] = silhouette_score(X, km.labels_)\nbest_k = max(scores, key=scores.get)</code></pre><ul><li>Elbow — быстрый и грубый ориентир</li><li>Silhouette — количественный, но дорогой на больших N (O(n²))</li><li>Davies-Bouldin index — альтернатива, быстрее silhouette</li></ul><p>Частая ошибка: выбирать k только по elbow на глаз — в реальных данных перегиб редко очевиден. Комбинируйте метрики с бизнес-смыслом (например, сколько сегментов клиентов реально нужно маркетингу).</p>",
+      "links": [
+        {
+          "title": "scikit-learn: silhouette_score",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.silhouette_score.html"
+        },
+        {
+          "title": "scikit-learn: Clustering performance evaluation",
+          "url": "https://scikit-learn.org/stable/modules/clustering.html#clustering-performance-evaluation"
+        },
+        {
+          "title": "Wikipedia: Elbow method",
+          "url": "https://en.wikipedia.org/wiki/Elbow_method_(clustering)"
+        }
+      ]
+    },
+    {
+      "title": "Иерархическая кластеризация",
+      "level": "🟡 Middle",
+      "explanation": "<p>Строит дерево (дендрограмму) вложенных кластеров. Агломеративный подход (снизу вверх) объединяет ближайшие кластеры по критерию linkage: <code>single</code>, <code>complete</code>, <code>average</code>, <code>ward</code>.</p><pre><code>from scipy.cluster.hierarchy import dendrogram, linkage\nZ = linkage(X_scaled, method='ward')\ndendrogram(Z)\n\nfrom sklearn.cluster import AgglomerativeClustering\nmodel = AgglomerativeClustering(n_clusters=4, linkage='ward')\nlabels = model.fit_predict(X_scaled)</code></pre><ul><li><code>ward</code> минимизирует дисперсию внутри кластера — похоже на k-means, часто лучший дефолт</li><li><code>single</code> склонен к «эффекту цепочки» (chaining) — вытянутые нефизичные кластеры</li><li>Не требует заранее знать k — можно «резать» дендрограмму на нужной высоте</li></ul><p>Минус для продакшена: сложность O(n²) или O(n³) по памяти/времени, не масштабируется на сотни тысяч точек без приближённых методов.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: AgglomerativeClustering",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html"
+        },
+        {
+          "title": "SciPy: hierarchical clustering",
+          "url": "https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html"
+        },
+        {
+          "title": "Wikipedia: Hierarchical clustering",
+          "url": "https://en.wikipedia.org/wiki/Hierarchical_clustering"
+        }
+      ]
+    },
+    {
+      "title": "DBSCAN и плотностная кластеризация",
+      "level": "🟡 Middle",
+      "explanation": "<p>DBSCAN находит кластеры произвольной формы через плотность: точка — core point, если у неё ≥ <code>min_samples</code> соседей в радиусе <code>eps</code>. Точки вне плотных областей помечаются как шум (<code>-1</code>).</p><pre><code>from sklearn.cluster import DBSCAN\ndb = DBSCAN(eps=0.5, min_samples=5)\nlabels = db.fit_predict(X_scaled)\nn_noise = (labels == -1).sum()</code></pre><ul><li>Не нужно задавать число кластеров заранее</li><li>Умеет находить выбросы «бесплатно» как побочный эффект</li><li>Чувствителен к <code>eps</code>: слишком маленький — всё шум, слишком большой — один гигантский кластер</li><li>Плохо работает при разной плотности кластеров — тогда стоит <code>HDBSCAN</code></li></ul><p>Практика: подбирайте <code>eps</code> через k-distance graph (график расстояния до k-го соседа, ищем «колено»). Для реальных гео/сенсорных данных HDBSCAN обычно устойчивее.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: DBSCAN",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html"
+        },
+        {
+          "title": "Wikipedia: DBSCAN",
+          "url": "https://en.wikipedia.org/wiki/DBSCAN"
+        },
+        {
+          "title": "HDBSCAN documentation",
+          "url": "https://hdbscan.readthedocs.io/en/latest/"
+        }
+      ]
+    },
+    {
+      "title": "Оценка качества кластеризации",
+      "level": "🟡 Middle",
+      "explanation": "<p>Без разметки метрики делятся на <b>внутренние</b> (используют только X и labels) и <b>внешние</b> (сравнение с ground truth, если он есть для валидации).</p><table><tr><th>Метрика</th><th>Тип</th><th>Диапазон</th></tr><tr><td>Silhouette</td><td>внутренняя</td><td>-1..1, больше лучше</td></tr><tr><td>Davies-Bouldin</td><td>внутренняя</td><td>≥0, меньше лучше</td></tr><tr><td>Adjusted Rand Index</td><td>внешняя</td><td>-1..1</td></tr><tr><td>Normalized Mutual Info</td><td>внешняя</td><td>0..1</td></tr></table><pre><code>from sklearn.metrics import adjusted_rand_score, davies_bouldin_score\nari = adjusted_rand_score(y_true, labels)\ndbi = davies_bouldin_score(X, labels)</code></pre><p>Ошибка на собеседовании и в проде: сравнивать инерцию k-means между разными k напрямую — она монотонно убывает с ростом k, это не метрика качества сама по себе, только вспомогательный сигнал для elbow.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Clustering performance evaluation",
+          "url": "https://scikit-learn.org/stable/modules/clustering.html#clustering-performance-evaluation"
+        },
+        {
+          "title": "scikit-learn: adjusted_rand_score",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.adjusted_rand_score.html"
+        },
+        {
+          "title": "Wikipedia: Rand index",
+          "url": "https://en.wikipedia.org/wiki/Rand_index"
+        }
+      ]
+    },
+    {
+      "title": "PCA: принципы и математика",
+      "level": "🟡 Middle",
+      "explanation": "<p>PCA ищет ортогональные направления (главные компоненты) максимальной дисперсии данных через собственные векторы ковариационной матрицы (или SVD). Позволяет сжать признаки, убрать мультиколлинеарность, ускорить downstream-модели.</p><pre><code>from sklearn.decomposition import PCA\npca = PCA(n_components=0.95)  # сохранить 95% дисперсии\nX_pca = pca.fit_transform(X_scaled)\nprint(pca.explained_variance_ratio_.cumsum())</code></pre><ul><li>Обязательно масштабируйте признаки — PCA чувствителен к дисперсии, признак в других единицах измерения «съест» всю первую компоненту</li><li>Компоненты линейны — не поймают нелинейную структуру (для этого нужны t-SNE/UMAP/автоэнкодеры)</li><li>Interpretability теряется: PC1 — это линейная комбинация исходных признаков, не «фича» в бизнес-смысле</li></ul><p>Продакшен-кейс: PCA перед k-means часто улучшает и скорость, и качество, убирая шумные измерения (curse of dimensionality).</p>",
+      "links": [
+        {
+          "title": "scikit-learn: PCA",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html"
+        },
+        {
+          "title": "scikit-learn: Decomposing signals (PCA)",
+          "url": "https://scikit-learn.org/stable/modules/decomposition.html#pca"
+        },
+        {
+          "title": "Wikipedia: Principal component analysis",
+          "url": "https://en.wikipedia.org/wiki/Principal_component_analysis"
+        }
+      ]
+    },
+    {
+      "title": "t-SNE для визуализации",
+      "level": "🟡 Middle",
+      "explanation": "<p>t-SNE сохраняет <b>локальную</b> структуру данных, превращая расстояния в вероятности соседства и минимизируя KL-дивергенцию между распределениями в исходном и целевом (обычно 2D) пространстве. Отлично подходит для визуализации кластеров эмбеддингов.</p><pre><code>from sklearn.manifold import TSNE\ntsne = TSNE(n_components=2, perplexity=30, random_state=42)\nX_2d = tsne.fit_transform(X_scaled)</code></pre><ul><li><b>Не используйте</b> t-SNE-координаты как фичи для модели — они не сохраняют глобальные расстояния и нестабильны между запусками</li><li>Расстояния между кластерами на графике t-SNE не значат ничего — только относительное соседство внутри локальных групп</li><li><code>perplexity</code> (обычно 5-50) сильно влияет на картинку — пробуйте несколько значений</li></ul><p>Частая ошибка: интерпретировать размер/плотность кластеров на t-SNE как реальную дисперсию данных — алгоритм искусственно «раздувает» плотные и «сжимает» разреженные регионы.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: t-SNE",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html"
+        },
+        {
+          "title": "Distill: How to Use t-SNE Effectively",
+          "url": "https://distill.pub/2016/misread-tsne/"
+        },
+        {
+          "title": "Wikipedia: t-distributed stochastic neighbor embedding",
+          "url": "https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding"
+        }
+      ]
+    },
+    {
+      "title": "UMAP: современная альтернатива",
+      "level": "🟡 Middle",
+      "explanation": "<p>UMAP основан на топологии (fuzzy simplicial sets) и обычно быстрее t-SNE, лучше сохраняет как локальную, так и частично глобальную структуру. Стал стандартом для визуализации больших наборов эмбеддингов (NLP, single-cell biology).</p><pre><code>import umap\nreducer = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2)\nX_umap = reducer.fit_transform(X_scaled)</code></pre><table><tr><th></th><th>t-SNE</th><th>UMAP</th></tr><tr><td>Скорость</td><td>медленнее</td><td>быстрее, масштабируется</td></tr><tr><td>Глобальная структура</td><td>слабо</td><td>лучше</td></tr><tr><td>Новые точки</td><td>нужен re-fit</td><td>есть <code>.transform()</code></td></tr></table><p>Совет: UMAP имеет <code>transform</code> для новых данных (в отличие от t-SNE), что делает его пригодным для прод-пайплайнов, а не только для разовой визуализации на ноутбуке.</p>",
+      "links": [
+        {
+          "title": "UMAP documentation",
+          "url": "https://umap-learn.readthedocs.io/en/latest/"
+        },
+        {
+          "title": "UMAP arXiv paper",
+          "url": "https://arxiv.org/abs/1802.03426"
+        },
+        {
+          "title": "scikit-learn: Manifold learning",
+          "url": "https://scikit-learn.org/stable/modules/manifold.html"
+        }
+      ]
+    },
+    {
+      "title": "Детекция аномалий: Isolation Forest",
+      "level": "🟡 Middle",
+      "explanation": "<p>Isolation Forest изолирует точки случайными разбиениями признакового пространства: аномалии изолируются быстрее (меньшая глубина дерева), потому что они «редкие и отличающиеся».</p><pre><code>from sklearn.ensemble import IsolationForest\niso = IsolationForest(contamination=0.05, random_state=42)\npred = iso.fit_predict(X)  # -1 = аномалия, 1 = норма\nscores = iso.decision_function(X)</code></pre><ul><li>Не требует предположений о распределении данных, в отличие от статистических методов (z-score)</li><li><code>contamination</code> — ожидаемая доля аномалий, сильно влияет на порог; в проде часто неизвестна заранее, требует калибровки на исторических инцидентах</li><li>Масштабируется хорошо, O(n log n), подходит для fraud detection на больших объёмах</li></ul><p>Продакшен-совет: используйте <code>decision_function</code> для ранжирования по «степени аномальности», а не только бинарный вывод — это позволяет настраивать порог под бизнес-требования (сколько алертов готова обработать команда).</p>",
+      "links": [
+        {
+          "title": "scikit-learn: IsolationForest",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html"
+        },
+        {
+          "title": "scikit-learn: Novelty and Outlier Detection",
+          "url": "https://scikit-learn.org/stable/modules/outlier_detection.html"
+        },
+        {
+          "title": "Wikipedia: Isolation forest",
+          "url": "https://en.wikipedia.org/wiki/Isolation_forest"
+        }
+      ]
+    },
+    {
+      "title": "Детекция аномалий: LOF и другие методы",
+      "level": "🔴 Senior",
+      "explanation": "<p>Local Outlier Factor (LOF) сравнивает локальную плотность точки с плотностью соседей — хорош, когда аномалии определяются относительно локального контекста, а не глобально (например, разная плотность кластеров).</p><pre><code>from sklearn.neighbors import LocalOutlierFactor\nlof = LocalOutlierFactor(n_neighbors=20, contamination=0.05)\npred = lof.fit_predict(X)  # только fit_predict, нет отдельного predict для новых данных без novelty=True</code></pre><ul><li><code>novelty=True</code> нужен, если хотите применять модель к новым точкам после обучения на «чистых» данных</li><li>One-Class SVM — альтернатива для высокоразмерных данных, но чувствителен к выбору ядра и гиперпараметров</li><li>Autoencoders — для сложных нелинейных структур (изображения, временные ряды): аномалия = высокая ошибка реконструкции</li></ul><p>В продакшене для мониторинга метрик часто комбинируют несколько детекторов (ensemble) и валидируют против размеченных инцидентов — чисто unsupervised методы дают много false positives без калибровки под конкретный домен.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: LocalOutlierFactor",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.LocalOutlierFactor.html"
+        },
+        {
+          "title": "scikit-learn: Novelty and Outlier Detection",
+          "url": "https://scikit-learn.org/stable/modules/outlier_detection.html"
+        },
+        {
+          "title": "scikit-learn: One-Class SVM",
+          "url": "https://scikit-learn.org/stable/modules/svm.html#svm-outlier-detection"
+        }
+      ]
+    },
+    {
+      "title": "Матричные разложения: SVD и NMF",
+      "level": "🔴 Senior",
+      "explanation": "<p>SVD раскладывает матрицу <code>A = U·Σ·Vᵀ</code>, выделяя латентные факторы — основа PCA и классических рекомендательных систем (matrix factorization). NMF требует неотрицательности, что даёт более интерпретируемые компоненты (например, «темы» в текстах).</p><pre><code>from sklearn.decomposition import TruncatedSVD, NMF\nsvd = TruncatedSVD(n_components=50)\nlatent = svd.fit_transform(sparse_matrix)  # работает с разреженными матрицами\n\nnmf = NMF(n_components=10, init='nndsvd')\nW = nmf.fit_transform(tfidf_matrix)  # W: документы x темы\nH = nmf.components_                  # H: темы x слова</code></pre><ul><li><code>TruncatedSVD</code> (не обычный PCA) нужен для sparse-матриц, типично в NLP и рекомендациях (user-item матрица)</li><li>NMF хорошо подходит для topic modeling как альтернатива LDA</li><li>Матричная факторизация — основа классических коллаборативных фильтров (Netflix Prize эпоха)</li></ul><p>Совет: перед SVD на разреженных данных не используйте <code>StandardScaler</code> с <code>with_mean=True</code> — это уничтожит разреженность и взорвёт память.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: TruncatedSVD",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html"
+        },
+        {
+          "title": "scikit-learn: NMF",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.NMF.html"
+        },
+        {
+          "title": "Wikipedia: Non-negative matrix factorization",
+          "url": "https://en.wikipedia.org/wiki/Non-negative_matrix_factorization"
+        }
+      ]
+    },
+    {
+      "title": "Рекомендательные системы: базовые подходы",
+      "level": "🔴 Senior",
+      "explanation": "<p>Коллаборативная фильтрация опирается на матрицу user-item взаимодействий без явных признаков контента. Два базовых подхода: memory-based (kNN по похожести пользователей/айтемов) и model-based (matrix factorization, ALS).</p><pre><code>from sklearn.metrics.pairwise import cosine_similarity\nitem_sim = cosine_similarity(user_item_matrix.T)\n\n# ALS-подход (implicit library) для implicit feedback\nimport implicit\nmodel = implicit.als.AlternatingLeastSquares(factors=64)\nmodel.fit(user_item_sparse)</code></pre><ul><li>Проблема холодного старта: новые пользователи/товары без истории — решается content-based fallback</li><li>Implicit feedback (клики, просмотры) требует других алгоритмов (ALS, BPR), чем explicit ratings</li><li>Метрики: precision@k, recall@k, NDCG — не accuracy/RMSE как в обычной регрессии</li></ul><p>Продакшен: чистая коллаборативная фильтрация редко используется одна — гибридные системы (CF + content-based + business rules) дают лучший результат и решают cold start.</p>",
+      "links": [
+        {
+          "title": "implicit library documentation",
+          "url": "https://benfred.github.io/implicit/"
+        },
+        {
+          "title": "scikit-learn: pairwise metrics",
+          "url": "https://scikit-learn.org/stable/modules/metrics.html#cosine-similarity"
+        },
+        {
+          "title": "Wikipedia: Collaborative filtering",
+          "url": "https://en.wikipedia.org/wiki/Collaborative_filtering"
+        }
+      ]
+    },
+    {
+      "title": "Эмбеддинги как представления данных",
+      "level": "🔴 Senior",
+      "explanation": "<p>Эмбеддинг — плотный вектор, кодирующий семантику объекта (слова, изображения, пользователя) так, что похожие объекты близки в векторном пространстве. Это мост между unsupervised representation learning и downstream-задачами.</p><pre><code>from sentence_transformers import SentenceTransformer\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\nembeddings = model.encode(['текст 1', 'текст 2'])\n\nfrom sklearn.metrics.pairwise import cosine_similarity\nsim = cosine_similarity([embeddings[0]], [embeddings[1]])</code></pre><ul><li>Эмбеддинги можно кластеризовать (k-means/DBSCAN) для сегментации без разметки</li><li>Векторные БД (FAISS, Pinecone, Milvus) нужны для эффективного nearest-neighbor поиска на миллионах эмбеддингов</li><li>Размерность эмбеддинга — компромисс: больше измерений — точнее, но дороже хранить/искать</li></ul><p>Частая ошибка в проде: сравнивать эмбеддинги из разных моделей/версий напрямую — они живут в несовместимых векторных пространствах, нужен re-embedding всей базы при смене модели.</p>",
+      "links": [
+        {
+          "title": "Sentence-Transformers documentation",
+          "url": "https://www.sbert.net/"
+        },
+        {
+          "title": "Hugging Face: Embeddings",
+          "url": "https://huggingface.co/docs/hub/en/models-tasks#sentence-similarity"
+        },
+        {
+          "title": "FAISS documentation",
+          "url": "https://faiss.ai/"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Почему перед k-means и PCA важно масштабировать признаки?",
+      "options": [
+        "Это ускоряет обучение в 10 раз всегда",
+        "Признаки с большим масштабом будут доминировать в расстояниях/дисперсии",
+        "Без масштабирования sklearn выдаст ошибку",
+        "Масштабирование не влияет на результат"
+      ],
+      "answer": 1,
+      "explain": "K-means и PCA основаны на расстояниях/дисперсии, поэтому признак с большим диапазоном значений подавляет остальные без нормализации."
+    },
+    {
+      "q": "Что показывает silhouette score, близкий к -1?",
+      "options": [
+        "Точка идеально соответствует своему кластеру",
+        "Кластеров слишком мало",
+        "Точка, вероятно, отнесена не в тот кластер",
+        "Данные не требуют кластеризации"
+      ],
+      "answer": 2,
+      "explain": "Отрицательный silhouette означает, что точка ближе к соседнему кластеру, чем к своему собственному."
+    },
+    {
+      "q": "Какой linkage в иерархической кластеризации минимизирует внутрикластерную дисперсию (аналог k-means)?",
+      "options": [
+        "single",
+        "complete",
+        "ward",
+        "average"
+      ],
+      "answer": 2,
+      "explain": "Ward linkage объединяет кластеры так, чтобы минимизировать прирост суммарной внутрикластерной дисперсии — часто лучший дефолт."
+    },
+    {
+      "q": "В чём главное преимущество DBSCAN перед k-means?",
+      "options": [
+        "Работает быстрее на любых данных",
+        "Находит кластеры произвольной формы и не требует заранее знать число кластеров",
+        "Требует меньше памяти всегда",
+        "Не зависит от гиперпараметров"
+      ],
+      "answer": 1,
+      "explain": "DBSCAN основан на плотности, умеет находить кластеры сложной формы и автоматически выделять шум/выбросы, в отличие от k-means, требующего заранее заданное k и предполагающего выпуклые кластеры."
+    },
+    {
+      "q": "Почему нельзя использовать координаты t-SNE как признаки для классификатора?",
+      "options": [
+        "t-SNE слишком медленный для этого",
+        "t-SNE не поддерживает numpy-массивы",
+        "Расстояния и глобальная структура в t-SNE не сохраняются между запусками и не отражают реальные метрики",
+        "t-SNE работает только с текстом"
+      ],
+      "answer": 2,
+      "explain": "t-SNE оптимизирует только локальное соседство, глобальные расстояния и результат нестабильны между запусками (в отличие от UMAP с transform)."
+    },
+    {
+      "q": "Что означает contamination в IsolationForest?",
+      "options": [
+        "Количество деревьев в лесу",
+        "Ожидаемая доля аномалий в данных, влияющая на порог классификации",
+        "Процент пропущенных значений",
+        "Глубина каждого дерева"
+      ],
+      "answer": 1,
+      "explain": "contamination задаёт ожидаемую долю выбросов и используется для установки порога decision_function при бинарной классификации аномалия/норма."
+    },
+    {
+      "q": "Чем LOF принципиально отличается от Isolation Forest?",
+      "options": [
+        "LOF работает только с изображениями",
+        "LOF оценивает локальную плотность относительно соседей, тогда как Isolation Forest изолирует точки случайными разбиениями",
+        "LOF быстрее на больших данных",
+        "LOF не умеет находить аномалии"
+      ],
+      "answer": 1,
+      "explain": "LOF сравнивает локальную плотность точки с соседями, что полезно при разной плотности кластеров, а Isolation Forest строит случайные деревья изоляции."
+    },
+    {
+      "q": "Зачем в NLP используют TruncatedSVD вместо обычного PCA?",
+      "options": [
+        "TruncatedSVD даёт более высокую точность всегда",
+        "TruncatedSVD работает напрямую с разреженными (sparse) матрицами без центрирования",
+        "Обычный PCA не существует в sklearn",
+        "TruncatedSVD не требует нормализации данных вообще"
+      ],
+      "answer": 1,
+      "explain": "PCA обычно центрирует данные (вычитает среднее), что разрушает разреженность и требует много памяти; TruncatedSVD работает без центрирования, подходит для sparse-матриц (TF-IDF и т.п.)."
+    },
+    {
+      "q": "Какая метрика типична для оценки рекомендательных систем, а не regression/classification?",
+      "options": [
+        "RMSE между предсказанными и истинными классами",
+        "F1-score для бинарной классификации спама",
+        "NDCG / precision@k, оценивающие качество ранжирования",
+        "R² коэффициент детерминации"
+      ],
+      "answer": 2,
+      "explain": "Рекомендательные системы оцениваются метриками ранжирования top-k (precision@k, recall@k, NDCG), а не стандартными метриками регрессии/классификации."
+    },
+    {
+      "q": "Что нужно сделать при смене модели эмбеддингов в продакшен-системе?",
+      "options": [
+        "Ничего, эмбеддинги разных моделей взаимозаменяемы",
+        "Просто нормализовать старые векторы под новую размерность",
+        "Пересчитать (re-embed) всю базу данных заново новой моделью",
+        "Увеличить порог cosine similarity в 2 раза"
+      ],
+      "answer": 2,
+      "explain": "Эмбеддинги разных моделей/версий живут в несовместимых векторных пространствах, поэтому при смене модели необходим полный re-embedding существующей базы."
+    }
+  ]
+}

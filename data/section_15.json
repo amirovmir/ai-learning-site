@@ -1,0 +1,406 @@
+{
+  "phase": "Phase 4 — LLM & GenAI",
+  "section": "🕹️ AI-агенты и AI в разработке",
+  "topics": [
+    {
+      "title": "Что такое AI-агент: цикл LLM + инструменты",
+      "level": "🟢 Junior",
+      "explanation": "<p>Агент — это не «умная модель сама по себе», а <b>цикл</b>: LLM получает задачу, решает что делать, вызывает инструмент, получает результат, повторяет, пока не сочтёт задачу решённой. Классическая схема — <code>observe → think → act → observe...</code>.</p><ul><li>LLM — «мозг», принимает решения на основе текста</li><li>Tools — функции, дающие доступ к внешнему миру (поиск, код, БД, файлы)</li><li>Orchestrator — код, который вызывает LLM в цикле и передаёт результаты инструментов обратно</li></ul><pre><code>while not done:\n    response = llm.call(messages, tools=tools)\n    if response.tool_calls:\n        for call in response.tool_calls:\n            result = execute_tool(call)\n            messages.append(tool_result(call, result))\n    else:\n        done = True\n        final_answer = response.content</code></pre><p>Типичная ошибка новичков — путать «агента» с «чат-ботом с системным промптом». Ключевое отличие агента — способность <b>самостоятельно решать</b>, какой инструмент вызвать и когда остановиться, а не следовать жёсткому скрипту.</p><p>Совет из продакшена: всегда ограничивайте число итераций цикла (<code>max_steps</code>), иначе агент может зациклиться и сжечь бюджет на токены.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Anthropic: Building effective agents",
+          "url": "https://www.anthropic.com/research/building-effective-agents"
+        },
+        {
+          "title": "Anthropic Tool Use docs",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/tool-use"
+        },
+        {
+          "title": "ReAct paper (arXiv)",
+          "url": "https://arxiv.org/abs/2210.03629"
+        }
+      ]
+    },
+    {
+      "title": "Проектирование инструментов (tools) для агента",
+      "level": "🟢 Junior",
+      "explanation": "<p>Качество агента на 80% определяется качеством описания инструментов, а не самой моделью. LLM выбирает инструмент по его имени, описанию и схеме параметров.</p><ul><li>Название должно быть однозначным: <code>search_web</code>, а не <code>do_stuff</code></li><li>Описание — что делает функция, когда её использовать, какие есть ограничения</li><li>Параметры — строгая JSON Schema с типами и примерами</li><li>Возвращаемое значение — компактное, структурированное (JSON), без «простыней» текста</li></ul><pre><code>{\n  \"name\": \"get_weather\",\n  \"description\": \"Возвращает текущую погоду по названию города. Используй, когда пользователь спрашивает про погоду.\",\n  \"parameters\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"city\": {\"type\": \"string\", \"description\": \"Название города, например Moscow\"}\n    },\n    \"required\": [\"city\"]\n  }\n}</code></pre><p>Типичная ошибка — делать один «супер-инструмент» с 20 опциональными параметрами. Модель путается и вызывает его неправильно. Лучше несколько узких инструментов, чем один универсальный.</p><p>Совет: логируйте все вызовы инструментов в проде — это лучший источник данных для отладки и улучшения промптов.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Anthropic Tool Use docs",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/tool-use"
+        },
+        {
+          "title": "OpenAI Function calling guide",
+          "url": "https://platform.openai.com/docs/guides/function-calling"
+        },
+        {
+          "title": "JSON Schema",
+          "url": "https://json-schema.org/"
+        }
+      ]
+    },
+    {
+      "title": "ReAct: рассуждение + действие",
+      "level": "🟢 Junior",
+      "explanation": "<p><b>ReAct</b> (Reasoning + Acting) — паттерн, где модель чередует явные размышления (<i>Thought</i>) и действия (<i>Action</i>), наблюдая результат (<i>Observation</i>) перед следующим шагом.</p><pre><code>Thought: нужно узнать курс доллара\nAction: search(\"курс доллара сегодня\")\nObservation: 1 USD = 92.3 RUB\nThought: теперь могу посчитать\nAction: calculator(\"100 * 92.3\")\nObservation: 9230\nThought: у меня есть ответ\nFinal Answer: 9230 рублей</code></pre><p>Промежуточные «Thought» шаги повышают качество за счёт того, что модель explicitly проговаривает план, прежде чем действовать — это снижает число импульсивных неверных вызовов инструментов.</p><ul><li>Плюс: прозрачность и объяснимость решений</li><li>Минус: больше токенов и латентности на каждый шаг</li></ul><p>В современных API (function calling / tool use) reasoning часто скрыт внутри модели (как в расширенном thinking), но принцип тот же: думать перед действием. Частая ошибка — не логировать Thought-шаги, из-за чего невозможно понять, почему агент принял неверное решение.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "ReAct paper (arXiv)",
+          "url": "https://arxiv.org/abs/2210.03629"
+        },
+        {
+          "title": "Anthropic: Building effective agents",
+          "url": "https://www.anthropic.com/research/building-effective-agents"
+        },
+        {
+          "title": "LangChain ReAct agent docs",
+          "url": "https://python.langchain.com/docs/modules/agents/agent_types/react"
+        }
+      ]
+    },
+    {
+      "title": "Планирование задач агентом (task decomposition)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Для сложных задач одного цикла ReAct недостаточно — нужен явный этап <b>планирования</b>: разбить цель на подзадачи, определить порядок и зависимости.</p><ul><li><b>Plan-and-Execute</b>: сначала LLM строит весь план списком шагов, затем исполнитель выполняет их по очереди</li><li><b>Динамическое перепланирование</b>: если шаг провалился или изменились условия, план пересобирается</li><li><b>Декомпозиция через подагентов</b>: сложная задача делится на подзадачи, каждая решается отдельным вызовом агента</li></ul><pre><code># Пример плана, сгенерированного LLM\n[\n  \"1. Найти актуальные цены конкурентов\",\n  \"2. Собрать данные о наших ценах из БД\",\n  \"3. Сравнить и найти отклонения > 10%\",\n  \"4. Сформировать отчёт в markdown\"\n]</code></pre><p>Типичная ошибка — доверять плану LLM вслепую и выполнять его без валидации промежуточных результатов. В проде добавляйте checkpoint'ы: после каждого шага проверяйте, что результат разумен, прежде чем переходить дальше.</p><p>Совет: для задач с чёткой структурой (ETL, отчёты) часто выгоднее написать детерминированный pipeline и вызывать LLM только на нужных шагах, а не отдавать всё планирование модели.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Anthropic: Building effective agents",
+          "url": "https://www.anthropic.com/research/building-effective-agents"
+        },
+        {
+          "title": "Plan-and-Solve Prompting paper (arXiv)",
+          "url": "https://arxiv.org/abs/2305.04091"
+        },
+        {
+          "title": "LangGraph docs",
+          "url": "https://langchain-ai.github.io/langgraph/"
+        }
+      ]
+    },
+    {
+      "title": "Multi-agent системы: роли и координация",
+      "level": "🟡 Middle",
+      "explanation": "<p>Вместо одного «универсального» агента часто эффективнее собрать команду специализированных агентов, каждый со своей ролью и набором инструментов.</p><table><tr><th>Паттерн</th><th>Описание</th></tr><tr><td>Supervisor / Orchestrator</td><td>Главный агент делегирует подзадачи другим и собирает результат</td></tr><tr><td>Pipeline</td><td>Агенты работают последовательно, как конвейер (researcher → writer → editor)</td></tr><tr><td>Debate / Critic</td><td>Один агент генерирует, другой критикует — повышает качество финального ответа</td></tr></table><pre><code>supervisor_prompt = \"\"\"\nТы координатор. Разбей задачу и делегируй:\n- researcher: сбор фактов\n- coder: написание кода\n- reviewer: проверка кода\nВерни JSON с назначениями.\n\"\"\"</code></pre><p>Библиотеки: LangGraph, CrewAI, AutoGen, OpenAI Swarm/Agents SDK. Частая ошибка — плодить агентов там, где хватило бы одного с хорошим промптом: multi-agent增 добавляет латентность, стоимость и точки отказа (ошибка на одном шаге каскадируется).</p><p>Совет: начинайте с одного агента, переходите на multi-agent только когда есть чёткое разделение ответственности и данные показывают, что один агент «путается».</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "LangGraph docs",
+          "url": "https://langchain-ai.github.io/langgraph/"
+        },
+        {
+          "title": "CrewAI docs",
+          "url": "https://docs.crewai.com/"
+        },
+        {
+          "title": "Microsoft AutoGen docs",
+          "url": "https://microsoft.github.io/autogen/"
+        },
+        {
+          "title": "OpenAI Agents SDK",
+          "url": "https://openai.github.io/openai-agents-python/"
+        }
+      ]
+    },
+    {
+      "title": "MCP (Model Context Protocol)",
+      "level": "🟡 Middle",
+      "explanation": "<p><b>MCP</b> — открытый протокол от Anthropic для стандартизации связи между LLM-приложениями и внешними источниками данных/инструментами. Идея: один универсальный интерфейс вместо кастомной интеграции под каждый агент.</p><ul><li><b>MCP Server</b> — предоставляет ресурсы (файлы, БД), инструменты (функции) и промпты</li><li><b>MCP Client</b> — приложение (например, Claude Desktop, Claude Code), которое подключается к серверам</li><li>Транспорт: stdio (локально) или HTTP/SSE (удалённо)</li></ul><pre><code># Минимальный MCP-сервер на Python (mcp SDK)\nfrom mcp.server.fastmcp import FastMCP\n\nmcp = FastMCP(\"demo\")\n\n@mcp.tool()\ndef get_issue(issue_id: str) -> str:\n    \"\"\"Возвращает описание задачи по ID\"\"\"\n    return fetch_from_jira(issue_id)\n\nmcp.run()</code></pre><p>Плюс MCP — переиспользуемость: написал сервер для Jira один раз, подключил к любому MCP-совместимому клиенту (Claude Code, Cursor и др.), не переписывая интеграцию под каждый инструмент.</p><p>Типичная ошибка — открывать MCP-сервер с чрезмерными правами (например, полный доступ к файловой системе) без ограничений. Всегда ограничивайте scope и добавляйте подтверждение для деструктивных операций.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Model Context Protocol — официальный сайт",
+          "url": "https://modelcontextprotocol.io/"
+        },
+        {
+          "title": "MCP спецификация",
+          "url": "https://spec.modelcontextprotocol.io/"
+        },
+        {
+          "title": "MCP на GitHub",
+          "url": "https://github.com/modelcontextprotocol"
+        },
+        {
+          "title": "Anthropic docs: MCP",
+          "url": "https://docs.anthropic.com/en/docs/agents-and-tools/mcp"
+        }
+      ]
+    },
+    {
+      "title": "Память агентов: краткосрочная и долгосрочная",
+      "level": "🟡 Middle",
+      "explanation": "<p>LLM не имеет памяти между вызовами — всё «состояние» агента нужно явно передавать в контексте или хранить внешне.</p><ul><li><b>Краткосрочная память</b> — история сообщений в текущей сессии (context window)</li><li><b>Долгосрочная память</b> — факты о пользователе/проекте, сохранённые во внешнем хранилище (векторная БД, key-value, файл)</li><li><b>Эпизодическая память</b> — записи о прошлых успешных/неуспешных действиях для обучения на опыте</li></ul><pre><code># Простая долгосрочная память через векторный поиск\nmemory.add(\"Пользователь предпочитает Python, не JS\")\n...\nrelevant = memory.search(query=\"на каком языке писать код?\", top_k=3)\nprompt = build_prompt(context=relevant, query=query)</code></pre><p>Проблема роста контекста: если просто накапливать всю историю, вы упрётесь в лимит токенов и рост стоимости/латентности. Решения — суммаризация старых сообщений, скользящее окно, извлечение только релевантных фрагментов (RAG-подход к памяти).</p><p>Частая ошибка — хранить в памяти «сырые» логи без структурирования, из-за чего поиск релевантных фактов работает плохо. Извлекайте факты в структурированном виде (например, JSON с ключевыми атрибутами).</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "LangChain Memory docs",
+          "url": "https://python.langchain.com/docs/modules/memory/"
+        },
+        {
+          "title": "Anthropic: Building effective agents",
+          "url": "https://www.anthropic.com/research/building-effective-agents"
+        },
+        {
+          "title": "Pinecone: vector databases guide",
+          "url": "https://www.pinecone.io/learn/vector-database/"
+        }
+      ]
+    },
+    {
+      "title": "Оценка (evaluation) агентов",
+      "level": "🔴 Senior",
+      "explanation": "<p>Оценивать агентов сложнее, чем обычные LLM-ответы, потому что важен не только финальный ответ, но и <b>траектория</b> — последовательность действий.</p><ul><li><b>Task success rate</b> — доля задач, доведённых до правильного результата</li><li><b>Trajectory evaluation</b> — проверка, что путь к решению был разумным (не «случайно повезло»)</li><li><b>LLM-as-judge</b> — другая LLM оценивает качество ответа по рубрике</li><li><b>Cost / latency per task</b> — критично для продакшена, не только качество</li></ul><pre><code># Пример метрики trajectory match\ndef eval_trajectory(actual_calls, expected_calls):\n    correct = sum(1 for a, e in zip(actual_calls, expected_calls) if a.tool == e.tool)\n    return correct / len(expected_calls)</code></pre><table><tr><th>Метод</th><th>Когда использовать</th></tr><tr><td>Golden dataset + exact match</td><td>Детерминированные задачи (API-вызовы)</td></tr><tr><td>LLM-judge с рубрикой</td><td>Открытые задачи (написание текста, код-ревью)</td></tr><tr><td>Human-in-the-loop</td><td>Высокий риск ошибки (финансы, медицина)</td></tr></table><p>Типичная ошибка — оценивать агента только на «счастливых путях». Обязательно тестируйте edge cases: недоступный инструмент, неоднозначный запрос, противоречивые данные. Используйте фреймворки типа <code>promptfoo</code>, <code>langsmith</code>, <code>braintrust</code> для регрессионного тестирования промптов и агентов.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "LangSmith docs",
+          "url": "https://docs.smith.langchain.com/"
+        },
+        {
+          "title": "promptfoo docs",
+          "url": "https://www.promptfoo.dev/docs/intro/"
+        },
+        {
+          "title": "Braintrust docs",
+          "url": "https://www.braintrust.dev/docs"
+        }
+      ]
+    },
+    {
+      "title": "AI-ассистенты для кода: Copilot, Cursor, Claude Code",
+      "level": "🟢 Junior",
+      "explanation": "<p>AI-кодинг-ассистенты делятся по глубине интеграции и уровню автономности:</p><table><tr><th>Инструмент</th><th>Модель работы</th></tr><tr><td>GitHub Copilot</td><td>Автодополнение в реальном времени, inline suggestions</td></tr><tr><td>Cursor</td><td>IDE с чатом, multi-file edits, композитные изменения</td></tr><tr><td>Claude Code</td><td>Агентный CLI: читает кодовую базу, выполняет команды, запускает тесты, коммитит</td></tr></table><p>Разница принципиальна: автодополнение (Copilot) реагирует на то, что вы уже печатаете, а агентные инструменты (Claude Code) самостоятельно исследуют репозиторий, запускают команды и итеративно проверяют результат.</p><pre><code># Типичный агентный цикл в Claude Code\n1. Прочитать релевантные файлы (Grep/Glob/Read)\n2. Внести изменения (Edit/Write)\n3. Запустить тесты (Bash)\n4. Если тесты упали — проанализировать и исправить\n5. Повторить до зелёных тестов</code></pre><p>Частая ошибка новичков — слепо принимать все предложения ассистента без чтения диффа. Всегда проверяйте сгенерированный код перед коммитом, особенно логику работы с деньгами, безопасностью и данными пользователей.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "GitHub Copilot docs",
+          "url": "https://docs.github.com/en/copilot"
+        },
+        {
+          "title": "Cursor docs",
+          "url": "https://docs.cursor.com/"
+        },
+        {
+          "title": "Claude Code docs",
+          "url": "https://docs.anthropic.com/en/docs/claude-code"
+        }
+      ]
+    },
+    {
+      "title": "Эффективная работа с AI при разработке (промптинг для кода)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Качество результата ассистента напрямую зависит от качества контекста и постановки задачи.</p><ul><li>Указывайте конкретные файлы/функции, а не «почини баг где-то там»</li><li>Давайте контекст: стек, конвенции проекта, ограничения (например, «не менять публичный API»)</li><li>Просите план перед реализацией для сложных задач — легче поймать ошибку в плане, чем в готовом коде</li><li>Разбивайте большие задачи на маленькие итерации с проверкой на каждом шаге</li></ul><pre><code>Плохой промпт:\n\"Сделай форму регистрации\"\n\nХороший промпт:\n\"Добавь форму регистрации в src/pages/Register.tsx.\nИспользуй react-hook-form + zod для валидации (как в LoginForm.tsx).\nПоля: email, password (мин 8 симв.), confirmPassword.\nНе трогай существующий AuthContext.\"</code></pre><p>Совет из практики: держите файл вроде <code>CLAUDE.md</code> / <code>.cursorrules</code> с описанием архитектуры, конвенций и команд запуска тестов — это резко снижает число итераций «объясни заново».</p><p>Ошибка — просить ассистента «переписать всё с нуля» вместо инкрементальных изменений: теряется контроль над диффом и растёт риск регрессий.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Claude Code docs",
+          "url": "https://docs.anthropic.com/en/docs/claude-code"
+        },
+        {
+          "title": "Anthropic prompt engineering guide",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview"
+        },
+        {
+          "title": "Cursor docs",
+          "url": "https://docs.cursor.com/"
+        }
+      ]
+    },
+    {
+      "title": "Code review с LLM",
+      "level": "🟡 Middle",
+      "explanation": "<p>LLM хорошо ловит определённые классы проблем в code review, но не заменяет человека полностью.</p><ul><li>Хорошо ловит: опечатки в логике, несоответствие конвенциям, отсутствие обработки ошибок, потенциальные null-указатели, забытые edge cases</li><li>Плохо ловит: архитектурные компромиссы, бизнес-логику без контекста продукта, проблемы производительности под реальной нагрузкой</li></ul><pre><code># Промпт для ревью диффа\nreview_prompt = f\"\"\"\nПроверь этот diff на:\n1. Логические ошибки\n2. Проблемы безопасности (SQL injection, XSS)\n3. Несоответствие стилю проекта (см. CLAUDE.md)\nНЕ комментируй форматирование — это делает linter.\n\ndiff:\n{diff_text}\n\"\"\"</code></pre><p>Продакшн-паттерн: LLM-ревью как дополнительный gate в CI (например, комментарии к PR), но обязательный человеческий approve перед мержем в main — особенно для кода, трогающего auth, платежи, миграции БД.</p><p>Типичная ошибка — гонять весь диф целиком без ограничения scope, из-за чего модель «размазывает» внимание и пропускает критичные строки. Разбивайте большие PR на логические чанки для ревью.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Anthropic prompt engineering guide",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview"
+        },
+        {
+          "title": "OWASP Top 10 for LLM Applications",
+          "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+        },
+        {
+          "title": "GitHub Copilot docs",
+          "url": "https://docs.github.com/en/copilot"
+        }
+      ]
+    },
+    {
+      "title": "Автоматизация рутины через агентов (хуки, скрипты)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Помимо интерактивного использования, агентов встраивают в автоматизированные пайплайны: генерация коммит-сообщений, автозаполнение changelog, триаж issue, генерация тестов по коду.</p><ul><li><b>Git hooks</b> — pre-commit генерация/проверка через LLM (например, проверка на секреты)</li><li><b>CI-интеграция</b> — авто-ревью PR, авто-триаж багов по логам</li><li><b>Scheduled agents</b> — периодический обход репозитория на поиск устаревших зависимостей, dead code</li></ul><pre><code># Пример: авто-генерация summary PR в CI\ndiff = get_pr_diff()\nsummary = llm.call(f\"Опиши изменения кратко:\\n{diff}\")\npost_pr_comment(summary)</code></pre><p>Ключевой принцип надёжной автоматизации — <b>детерминированные обвязки вокруг недетерминированного ядра</b>: сам LLM-вызов непредсказуем, но пайплайн вокруг (retry, валидация вывода, fallback) должен быть строгим кодом.</p><p>Частая ошибка — давать автоматизированному агенту деструктивные права (force push, удаление файлов, мерж без ревью) без human-in-the-loop подтверждения. Для необратимых действий всегда нужен явный approval gate.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "GitHub Actions docs",
+          "url": "https://docs.github.com/en/actions"
+        },
+        {
+          "title": "Claude Code docs",
+          "url": "https://docs.anthropic.com/en/docs/claude-code"
+        },
+        {
+          "title": "pre-commit framework docs",
+          "url": "https://pre-commit.com/"
+        }
+      ]
+    },
+    {
+      "title": "Ограничения и риски автономных агентов",
+      "level": "🔴 Senior",
+      "explanation": "<p>Автономность агента — это компромисс между удобством и контролем. Чем больше агент делает сам, тем выше риск непредсказуемых последствий.</p><ul><li><b>Prompt injection</b> — вредоносный текст в данных (веб-страница, email, файл), заставляющий агента выполнить нежелательное действие</li><li><b>Цепочки ошибок</b> — одна неверная посылка на раннем шаге искажает весь дальнейший план</li><li><b>Избыточные привилегии</b> — агент с доступом к продакшн-БД может случайно удалить данные при неверной интерпретации задачи</li><li><b>Стоимость/латентность runaway</b> — зацикливание без ограничения шагов</li></ul><pre><code># Пример защиты от prompt injection в инструменте\ndef fetch_url(url: str) -> str:\n    content = http_get(url)\n    # Помечаем внешний контент как ненадёжный\n    return f\"[UNTRUSTED EXTERNAL CONTENT]\\n{content}\\n[END]\"</code></pre><table><tr><th>Митигация</th><th>Как</th></tr><tr><td>Least privilege</td><td>Инструменты только с минимально необходимыми правами</td></tr><tr><td>Human approval</td><td>Подтверждение для деструктивных/необратимых действий</td></tr><tr><td>Sandboxing</td><td>Выполнение кода в изолированной среде, без доступа к реальной инфраструктуре</td></tr><tr><td>Audit log</td><td>Полное логирование всех действий агента для разбора инцидентов</td></tr></table><p>Главная ошибка senior-инженеров — недооценивать риск, потому что «модель обычно ведёт себя разумно». В проде проектируйте систему так, будто агент <i>иногда</i> сделает худшее из возможного, и ограничивайте blast radius заранее.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "OWASP Top 10 for LLM Applications",
+          "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
+        },
+        {
+          "title": "Anthropic: Building effective agents",
+          "url": "https://www.anthropic.com/research/building-effective-agents"
+        },
+        {
+          "title": "Simon Willison: Prompt injection",
+          "url": "https://simonwillison.net/series/prompt-injection/"
+        }
+      ]
+    },
+    {
+      "title": "Function calling / Tool use API у современных LLM",
+      "level": "🟡 Middle",
+      "explanation": "<p>Function calling (tool use) — механизм, встроенный в API современных LLM (Anthropic, OpenAI и др.), позволяющий модели структурированно запрашивать вызов внешней функции вместо генерации свободного текста.</p><pre><code>import anthropic\nclient = anthropic.Anthropic()\n\nresponse = client.messages.create(\n    model=\"claude-sonnet-4-5\",\n    max_tokens=1024,\n    tools=[{\n        \"name\": \"get_stock_price\",\n        \"description\": \"Возвращает цену акции по тикеру\",\n        \"input_schema\": {\n            \"type\": \"object\",\n            \"properties\": {\"ticker\": {\"type\": \"string\"}},\n            \"required\": [\"ticker\"]\n        }\n    }],\n    messages=[{\"role\": \"user\", \"content\": \"Сколько стоит акция AAPL?\"}]\n)\n\nfor block in response.content:\n    if block.type == \"tool_use\":\n        result = get_stock_price(block.input[\"ticker\"])\n        # отправляем результат обратно в диалог как tool_result</code></pre><p>Модель возвращает <code>stop_reason: tool_use</code> вместо обычного текста, и приложение обязано выполнить вызов и вернуть результат в следующем сообщении с ролью <code>tool_result</code>, чтобы диалог продолжился.</p><p>Частая ошибка — забывать, что модель может запросить <b>несколько</b> инструментов параллельно за один ответ; код должен уметь обработать список tool_calls, а не только первый.</p>",
+      "quiz_ref": true,
+      "links": [
+        {
+          "title": "Anthropic Tool Use docs",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/tool-use"
+        },
+        {
+          "title": "OpenAI Function calling guide",
+          "url": "https://platform.openai.com/docs/guides/function-calling"
+        },
+        {
+          "title": "Anthropic Python SDK (GitHub)",
+          "url": "https://github.com/anthropics/anthropic-sdk-python"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что принципиально отличает AI-агента от обычного вызова LLM с системным промптом?",
+      "options": [
+        "Агент использует более крупную модель",
+        "Агент самостоятельно решает, какой инструмент вызвать и когда остановиться, работая в цикле",
+        "Агент не может писать код",
+        "Агент всегда работает без интернета"
+      ],
+      "answer": 1,
+      "explain": "Ключевое отличие агента — цикл наблюдение-решение-действие с самостоятельным выбором инструментов, а не жёсткий одноразовый вызов."
+    },
+    {
+      "q": "Какая ошибка чаще всего снижает качество работы агента с инструментами?",
+      "options": [
+        "Слишком короткие имена функций",
+        "Один универсальный инструмент с 20 опциональными параметрами вместо нескольких узких",
+        "Использование JSON Schema для параметров",
+        "Логирование вызовов инструментов"
+      ],
+      "answer": 1,
+      "explain": "Модели проще и надёжнее выбирать между узкоспециализированными инструментами, чем правильно заполнять один перегруженный универсальный."
+    },
+    {
+      "q": "Что даёт паттерн ReAct (Reasoning + Acting)?",
+      "options": [
+        "Ускоряет ответ модели за счёт пропуска рассуждений",
+        "Явное чередование мыслей и действий, что снижает число импульсивных неверных вызовов",
+        "Позволяет обойтись без инструментов вообще",
+        "Гарантирует нулевую стоимость запроса"
+      ],
+      "answer": 1,
+      "explain": "ReAct заставляет модель явно проговаривать план (Thought) перед действием (Action), что повышает качество решений ценой доп. токенов."
+    },
+    {
+      "q": "Почему в продакшене не стоит доверять плану LLM без валидации промежуточных шагов?",
+      "options": [
+        "Планы LLM всегда написаны на английском",
+        "Ошибка на раннем шаге плана может каскадироваться и испортить весь результат",
+        "Планирование запрещено политикой OpenAI/Anthropic",
+        "LLM не умеет строить списки"
+      ],
+      "answer": 1,
+      "explain": "Без checkpoint-валидации ошибочная посылка на одном из первых шагов распространяется на все последующие."
+    },
+    {
+      "q": "Когда переход на multi-agent архитектуру оправдан?",
+      "options": [
+        "Всегда, чем больше агентов — тем лучше результат",
+        "Когда есть чёткое разделение ответственности и данные показывают, что один агент справляется хуже",
+        "Только если бюджет на токены неограничен",
+        "Multi-agent никогда не используется в проде"
+      ],
+      "answer": 1,
+      "explain": "Multi-agent добавляет латентность, стоимость и точки отказа, поэтому его стоит вводить только при обоснованной необходимости разделения ролей."
+    },
+    {
+      "q": "Какая главная ценность MCP (Model Context Protocol)?",
+      "options": [
+        "Он заменяет собой LLM API целиком",
+        "Стандартизированный интерфейс, позволяющий переиспользовать один сервер-интеграцию с разными LLM-клиентами",
+        "MCP ускоряет обучение моделей",
+        "MCP работает только с Python"
+      ],
+      "answer": 1,
+      "explain": "MCP позволяет написать интеграцию (например, с Jira) один раз и подключать её к любому MCP-совместимому клиенту без переписывания."
+    },
+    {
+      "q": "Как правильно решать проблему роста контекста в памяти агента?",
+      "options": [
+        "Хранить всю историю сообщений без ограничений",
+        "Использовать суммаризацию, скользящее окно и извлечение только релевантных фактов",
+        "Отключить память полностью",
+        "Увеличивать max_tokens до максимума у провайдера"
+      ],
+      "answer": 1,
+      "explain": "Простое накопление истории упирается в лимиты контекста и рост стоимости; нужна суммаризация и релевантный retrieval (RAG-подход)."
+    },
+    {
+      "q": "Почему оценивать агентов сложнее, чем обычные LLM-ответы?",
+      "options": [
+        "Агенты не дают текстовых ответов вообще",
+        "Важна не только правильность финального ответа, но и разумность траектории действий",
+        "Агентов нельзя тестировать автоматически",
+        "У агентов нет метрик стоимости"
+      ],
+      "answer": 1,
+      "explain": "Trajectory evaluation проверяет, что путь к решению был обоснованным, а не что ответ верен случайно."
+    },
+    {
+      "q": "Чем агентный CLI-инструмент (например, Claude Code) принципиально отличается от автодополнения кода (Copilot)?",
+      "options": [
+        "Ничем, это одно и то же",
+        "Агентный инструмент самостоятельно исследует репозиторий, выполняет команды и итеративно проверяет результат",
+        "Автодополнение работает быстрее в любых сценариях",
+        "Агентные инструменты не умеют работать с git"
+      ],
+      "answer": 1,
+      "explain": "Автодополнение реагирует на печатаемый текст, тогда как агентный инструмент действует автономно: читает файлы, запускает тесты, исправляет ошибки в цикле."
+    },
+    {
+      "q": "Какой риск считается одним из самых серьёзных для автономных агентов с доступом к внешним данным?",
+      "options": [
+        "Слишком красивое форматирование ответа",
+        "Prompt injection — вредоносный текст во внешних данных, заставляющий агента выполнить нежелательное действие",
+        "Использование JSON вместо XML",
+        "Слишком быстрая работа агента"
+      ],
+      "answer": 1,
+      "explain": "Prompt injection через внешний контент (веб-страницы, письма, файлы) — один из главных векторов атак на агентов, требующий пометки контента как недоверенного и ограничения привилегий."
+    }
+  ]
+}

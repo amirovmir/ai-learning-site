@@ -1,0 +1,400 @@
+{
+  "phase": "Phase 3 — Deep Learning",
+  "section": "💬 NLP и трансформеры",
+  "topics": [
+    {
+      "title": "Токенизация: от слов до BPE",
+      "level": "🟢 Junior",
+      "explanation": "<p>Токенизация — первый шаг любого NLP-пайплайна: превращение текста в последовательность чисел. Наивная токенизация по словам плохо работает из-за огромного словаря и OOV (out-of-vocabulary) слов. Современные модели используют <b>subword</b>-токенизацию: Byte Pair Encoding (BPE), WordPiece, SentencePiece/Unigram.</p><p>BPE строит словарь итеративно: начинает с символов и объединяет самые частые пары в новый токен, пока не достигнет нужного размера словаря (обычно 30-50k).</p><pre><code>from tokenizers import ByteLevelBPETokenizer\ntok = ByteLevelBPETokenizer()\ntok.train(files=['corpus.txt'], vocab_size=30000, min_frequency=2)\nids = tok.encode('Привет, мир!').ids</code></pre><p>Типичные ошибки продакшена:</p><ul><li>Несовпадение токенизатора обучения и инференса (разные версии → тихий деградейшн качества)</li><li>Игнорирование спецтокенов [CLS], [SEP], [PAD] при подготовке батчей</li><li>Обрезка длинных текстов без учёта, что важная информация в конце</li></ul><p>Совет: всегда сохраняйте токенизатор вместе с весами модели (<code>tokenizer.save_pretrained()</code>), а не полагайтесь на «тот же самый файл на сервере».</p>",
+      "links": [
+        {
+          "title": "HuggingFace Tokenizers docs",
+          "url": "https://huggingface.co/docs/tokenizers/index"
+        },
+        {
+          "title": "BPE — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Byte_pair_encoding"
+        },
+        {
+          "title": "SentencePiece GitHub",
+          "url": "https://github.com/google/sentencepiece"
+        }
+      ]
+    },
+    {
+      "title": "Word2Vec и статические эмбеддинги",
+      "level": "🟢 Junior",
+      "explanation": "<p>Word2Vec (Mikolov, 2013) — первая массово успешная идея: представить слово вектором так, чтобы похожие по контексту слова были близки в векторном пространстве. Два варианта архитектуры: <b>CBOW</b> (предсказать слово по контексту) и <b>Skip-gram</b> (предсказать контекст по слову).</p><pre><code>from gensim.models import Word2Vec\nsentences = [['король', 'правит', 'страной'], ['королева', 'правит', 'страной']]\nmodel = Word2Vec(sentences, vector_size=100, window=5, min_count=1, sg=1)\nmodel.wv.most_similar('король')</code></pre><p>Классический пример арифметики эмбеддингов: <code>king - man + woman ≈ queen</code>. Но у word2vec есть фундаментальное ограничение — <b>один вектор на слово независимо от контекста</b>: «замок» (крепость) и «замок» (на двери) получают одинаковое представление.</p><table><tr><th>Метод</th><th>Контекстность</th><th>Год</th></tr><tr><td>Word2Vec/GloVe</td><td>Нет</td><td>2013-2014</td></tr><tr><td>ELMo</td><td>Частично (BiLSTM)</td><td>2018</td></tr><tr><td>BERT-embeddings</td><td>Полная</td><td>2018+</td></tr></table><p>На практике сегодня word2vec используют редко для NLP-задач, но идея остаётся базой для понимания эмбеддингов рекомендательных систем и графов.</p>",
+      "links": [
+        {
+          "title": "Word2Vec — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Word2vec"
+        },
+        {
+          "title": "Gensim Word2Vec docs",
+          "url": "https://radimrehurek.com/gensim/models/word2vec.html"
+        },
+        {
+          "title": "Distributed Representations of Words and Phrases (arXiv)",
+          "url": "https://arxiv.org/abs/1310.4546"
+        }
+      ]
+    },
+    {
+      "title": "RNN и LSTM: последовательное моделирование",
+      "level": "🟢 Junior",
+      "explanation": "<p>Рекуррентные сети (RNN) обрабатывают последовательность шаг за шагом, храня скрытое состояние <code>h_t</code>. Проблема ванильных RNN — <b>затухающий/взрывающийся градиент</b>: при обратном распространении через много шагов градиент умножается много раз и либо исчезает, либо взрывается.</p><p>LSTM (Long Short-Term Memory) решает это с помощью гейтов (forget, input, output) и отдельной ячейки памяти <code>c_t</code>, которая передаётся почти без изменений — аналог skip-connection во времени.</p><pre><code>import torch.nn as nn\nlstm = nn.LSTM(input_size=300, hidden_size=256, num_layers=2, bidirectional=True, batch_first=True)\noutput, (h_n, c_n) = lstm(embedded_batch)</code></pre><ul><li>GRU — упрощённая версия LSTM с меньшим числом параметров, часто сравнима по качеству</li><li>Основная беда: последовательная обработка не параллелится на GPU → медленное обучение на длинных текстах</li><li>Именно эта проблема и отсутствие прямого доступа к дальним токенам подтолкнули к изобретению attention и Transformer</li></ul><p>Сегодня RNN/LSTM почти не используют для NLP на старте новых проектов, но знание архитектуры важно для понимания истории и для задач временных рядов, где они всё ещё конкурентоспособны.</p>",
+      "links": [
+        {
+          "title": "Understanding LSTM Networks (colah's blog)",
+          "url": "https://colah.github.io/posts/2015-08-Understanding-LSTMs/"
+        },
+        {
+          "title": "PyTorch nn.LSTM docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html"
+        },
+        {
+          "title": "Long Short-Term Memory — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Long_short-term_memory"
+        }
+      ]
+    },
+    {
+      "title": "Механизм внимания (Attention)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Attention позволяет модели «смотреть» на все токены входа одновременно и взвешенно комбинировать их, вместо того чтобы сжимать всю информацию в одно скрытое состояние, как в RNN. Ключевая формула — <b>scaled dot-product attention</b>:</p><pre><code>Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V</code></pre><p>Q (query), K (key), V (value) — линейные проекции входа. Деление на sqrt(d_k) нужно для стабилизации градиентов при больших размерностях (иначе softmax уходит в насыщение).</p><pre><code>import torch, torch.nn.functional as F\ndef attention(Q, K, V):\n    scores = Q @ K.transpose(-2, -1) / (Q.size(-1) ** 0.5)\n    weights = F.softmax(scores, dim=-1)\n    return weights @ V</code></pre><p>Изначально attention добавляли поверх RNN (Bahdanau, 2014) для машинного перевода — модель училась выравнивать слова разных языков. Прорыв случился, когда авторы Transformer показали, что <b>attention сам по себе достаточен</b>, без рекуррентности вообще.</p><p>Типичная ошибка на собеседовании — не суметь объяснить, зачем нужна маскировка (causal mask) в декодере: она запрещает токену «видеть» будущие позиции при обучении генеративных моделей.</p>",
+      "links": [
+        {
+          "title": "Neural Machine Translation by Jointly Learning to Align and Translate (arXiv)",
+          "url": "https://arxiv.org/abs/1409.0473"
+        },
+        {
+          "title": "Attention Is All You Need (arXiv)",
+          "url": "https://arxiv.org/abs/1706.03762"
+        },
+        {
+          "title": "The Illustrated Transformer",
+          "url": "https://jalammar.github.io/illustrated-transformer/"
+        }
+      ]
+    },
+    {
+      "title": "Архитектура Transformer",
+      "level": "🟡 Middle",
+      "explanation": "<p>Статья «Attention is All You Need» (2017) представила архитектуру, полностью построенную на attention, без RNN/CNN. Ключевые компоненты:</p><ul><li><b>Multi-Head Attention</b> — несколько параллельных attention-голов, каждая учится своим паттернам (синтаксис, кореференция и т.д.)</li><li><b>Positional Encoding</b> — так как attention не знает порядок токенов, позицию добавляют явно (синус/косинус или обучаемые эмбеддинги)</li><li><b>Feed-Forward блок</b> — полносвязная сеть, применяется к каждой позиции независимо</li><li><b>Residual connections + LayerNorm</b> — критичны для обучения глубоких стеков (12-96+ слоёв)</li></ul><pre><code>import torch.nn as nn\nencoder_layer = nn.TransformerEncoderLayer(d_model=512, nhead=8, dim_feedforward=2048)\nencoder = nn.TransformerEncoder(encoder_layer, num_layers=6)\nout = encoder(src)  # src: (seq_len, batch, d_model)</code></pre><p>Различают три схемы: <b>encoder-only</b> (BERT — понимание), <b>decoder-only</b> (GPT — генерация), <b>encoder-decoder</b> (T5, оригинальный Transformer — seq2seq задачи типа перевода).</p><p>Практический совет: не пишите Transformer с нуля в продакшене — используйте HuggingFace или PyTorch-реализации, а свои силы тратьте на данные и fine-tuning.</p>",
+      "links": [
+        {
+          "title": "Attention Is All You Need (arXiv)",
+          "url": "https://arxiv.org/abs/1706.03762"
+        },
+        {
+          "title": "PyTorch nn.TransformerEncoder docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.TransformerEncoder.html"
+        },
+        {
+          "title": "The Illustrated Transformer",
+          "url": "https://jalammar.github.io/illustrated-transformer/"
+        },
+        {
+          "title": "HuggingFace Transformers docs",
+          "url": "https://huggingface.co/docs/transformers/index"
+        }
+      ]
+    },
+    {
+      "title": "BERT и encoder-модели",
+      "level": "🟡 Middle",
+      "explanation": "<p>BERT (Bidirectional Encoder Representations from Transformers, 2018) — encoder-only модель, обученная на двух задачах: <b>Masked Language Modeling</b> (предсказать замаскированные токены, видя контекст с обеих сторон) и <b>Next Sentence Prediction</b>.</p><p>Двунаправленность — главное отличие от GPT: BERT видит весь текст сразу, поэтому отлично подходит для задач <i>понимания</i> (классификация, NER, QA), но не для генерации текста слева направо.</p><pre><code>from transformers import BertTokenizer, BertModel\ntok = BertTokenizer.from_pretrained('bert-base-uncased')\nmodel = BertModel.from_pretrained('bert-base-uncased')\ninputs = tok('Hello world', return_tensors='pt')\nout = model(**inputs)\ncls_embedding = out.last_hidden_state[:, 0, :]  # представление [CLS]</code></pre><p>Семейство моделей выросло: RoBERTa (улучшенное обучение), DistilBERT (дистилляция, в 2 раза быстрее), DeBERTa (disentangled attention), ELECTRA (эффективнее pretraining через replaced-token-detection).</p><p>Частая ошибка — использовать [CLS]-эмбеддинг «как есть» для similarity-задач: без специального дообучения (Sentence-BERT) эти вектора плохо разделяют смысл предложений по косинусной близости.</p>",
+      "links": [
+        {
+          "title": "BERT paper (arXiv)",
+          "url": "https://arxiv.org/abs/1810.04805"
+        },
+        {
+          "title": "HuggingFace BERT docs",
+          "url": "https://huggingface.co/docs/transformers/model_doc/bert"
+        },
+        {
+          "title": "Sentence-BERT paper (arXiv)",
+          "url": "https://arxiv.org/abs/1908.10084"
+        }
+      ]
+    },
+    {
+      "title": "GPT и decoder-модели",
+      "level": "🟡 Middle",
+      "explanation": "<p>GPT (Generative Pre-trained Transformer) — decoder-only архитектура с <b>causal (autoregressive) attention</b>: каждый токен видит только предыдущие токены. Обучается на простой задаче — предсказать следующий токен (next-token prediction), что оказалось невероятно масштабируемо.</p><pre><code>from transformers import GPT2LMHeadModel, GPT2Tokenizer\ntok = GPT2Tokenizer.from_pretrained('gpt2')\nmodel = GPT2LMHeadModel.from_pretrained('gpt2')\ninput_ids = tok.encode('The future of AI is', return_tensors='pt')\noutput = model.generate(input_ids, max_length=30, do_sample=True, temperature=0.8, top_p=0.9)\nprint(tok.decode(output[0]))</code></pre><p>Ключевые параметры генерации, которые нужно понимать в продакшене:</p><ul><li><code>temperature</code> — сглаживание/заострение распределения (низкая = детерминированнее)</li><li><code>top_k</code> / <code>top_p</code> (nucleus sampling) — ограничение пространства кандидатов токенов</li><li><code>repetition_penalty</code> — борьба с зацикливанием на повторах</li></ul><p>GPT-3/4, LLaMA, Mistral — все decoder-only. Масштабирование (scaling laws Kaplan/Chinchilla) показало, что качество предсказуемо растёт с размером модели, данных и compute — это и породило гонку LLM.</p>",
+      "links": [
+        {
+          "title": "HuggingFace GPT-2 docs",
+          "url": "https://huggingface.co/docs/transformers/model_doc/gpt2"
+        },
+        {
+          "title": "Language Models are Few-Shot Learners (GPT-3 paper, arXiv)",
+          "url": "https://arxiv.org/abs/2005.14165"
+        },
+        {
+          "title": "Scaling Laws for Neural Language Models (arXiv)",
+          "url": "https://arxiv.org/abs/2001.08361"
+        },
+        {
+          "title": "Andrej Karpathy — Let's build GPT (YouTube)",
+          "url": "https://www.youtube.com/watch?v=kCc8FmEb1nY"
+        }
+      ]
+    },
+    {
+      "title": "HuggingFace transformers: экосистема",
+      "level": "🟢 Junior",
+      "explanation": "<p>Библиотека <code>transformers</code> — де-факто стандарт для работы с предобученными NLP/LLM моделями. Единый API: <code>AutoTokenizer</code> + <code>AutoModel</code> подхватывают правильный класс по имени модели с Hugging Face Hub.</p><pre><code>from transformers import pipeline\nclassifier = pipeline('sentiment-analysis', model='distilbert-base-uncased-finetuned-sst-2-english')\nresult = classifier('This library saves so much time!')\n# [{'label': 'POSITIVE', 'score': 0.9998}]</code></pre><p>Экосистема включает: <code>datasets</code> (загрузка/обработка датасетов), <code>tokenizers</code> (быстрая токенизация на Rust), <code>accelerate</code> (мультиGPU/mixed precision без боли), <code>peft</code> (LoRA и другие эффективные методы fine-tuning), <code>trl</code> (RLHF/DPO для LLM).</p><ul><li>Совет: используйте <code>pipeline()</code> для быстрого прототипа, но для продакшена берите модель/токенизатор напрямую — больше контроля над батчингом и латентностью</li><li>Ошибка новичков: скачивать модель заново при каждом старте контейнера — кэшируйте веса в volume или встраивайте в образ</li><li>Проверяйте лицензию модели (не все permissive для коммерческого использования)</li></ul>",
+      "links": [
+        {
+          "title": "HuggingFace Transformers docs",
+          "url": "https://huggingface.co/docs/transformers/index"
+        },
+        {
+          "title": "HuggingFace Datasets docs",
+          "url": "https://huggingface.co/docs/datasets/index"
+        },
+        {
+          "title": "HuggingFace Accelerate docs",
+          "url": "https://huggingface.co/docs/accelerate/index"
+        },
+        {
+          "title": "HuggingFace PEFT docs",
+          "url": "https://huggingface.co/docs/peft/index"
+        }
+      ]
+    },
+    {
+      "title": "Fine-tuning на своих данных",
+      "level": "🟡 Middle",
+      "explanation": "<p>Fine-tuning — дообучение предобученной модели на целевой задаче. Полный fine-tuning (все веса) требует много памяти GPU для больших моделей, поэтому на практике часто используют <b>parameter-efficient</b> методы: LoRA, adapters, prefix-tuning.</p><pre><code>from transformers import Trainer, TrainingArguments, AutoModelForSequenceClassification\nmodel = AutoModelForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=3)\nargs = TrainingArguments(\n    output_dir='./out', per_device_train_batch_size=16,\n    num_train_epochs=3, learning_rate=2e-5, evaluation_strategy='epoch')\ntrainer = Trainer(model=model, args=args, train_dataset=train_ds, eval_dataset=val_ds)\ntrainer.train()</code></pre><p>LoRA (Low-Rank Adaptation) замораживает исходные веса и добавляет обучаемые низкоранговые матрицы — обучается 0.1-1% параметров с почти тем же качеством:</p><pre><code>from peft import LoraConfig, get_peft_model\nconfig = LoraConfig(r=8, lora_alpha=16, target_modules=['q_proj', 'v_proj'], lora_dropout=0.05)\nmodel = get_peft_model(model, config)</code></pre><p>Практические грабли: слишком высокий learning rate «ломает» предобученные знания (catastrophic forgetting); маленький датасет — переобучение за 1-2 эпохи, обязательно следите за eval loss и делайте early stopping.</p>",
+      "links": [
+        {
+          "title": "HuggingFace Fine-tuning guide",
+          "url": "https://huggingface.co/docs/transformers/training"
+        },
+        {
+          "title": "LoRA paper (arXiv)",
+          "url": "https://arxiv.org/abs/2106.09685"
+        },
+        {
+          "title": "HuggingFace PEFT docs",
+          "url": "https://huggingface.co/docs/peft/index"
+        }
+      ]
+    },
+    {
+      "title": "Классификация текста",
+      "level": "🟢 Junior",
+      "explanation": "<p>Классическая задача: присвоить тексту одну или несколько меток (спам/не спам, тональность, тема). Пайплайн: токенизация → энкодер (BERT-подобный) → [CLS]-представление → linear-классификатор → softmax/sigmoid.</p><pre><code>from transformers import AutoTokenizer, AutoModelForSequenceClassification\nimport torch\ntok = AutoTokenizer.from_pretrained('distilbert-base-uncased')\nmodel = AutoModelForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=2)\ninputs = tok('Great product, highly recommend!', return_tensors='pt', truncation=True, padding=True)\nlogits = model(**inputs).logits\nprobs = torch.softmax(logits, dim=-1)</code></pre><p>Для многометочной (multi-label) классификации используют <code>BCEWithLogitsLoss</code> вместо <code>CrossEntropyLoss</code> и sigmoid вместо softmax на выходе.</p><ul><li>Дисбаланс классов — частая проблема: используйте <code>class_weight</code>, focal loss или oversampling редкого класса</li><li>Метрики: accuracy обманчива при дисбалансе — смотрите F1, precision/recall, confusion matrix</li><li>Для простых задач с малым датасетом иногда классический TF-IDF + LogisticRegression обгоняет BERT по скорости внедрения без просадки качества</li></ul>",
+      "links": [
+        {
+          "title": "HuggingFace Text Classification guide",
+          "url": "https://huggingface.co/docs/transformers/tasks/sequence_classification"
+        },
+        {
+          "title": "scikit-learn Text Feature Extraction (TF-IDF)",
+          "url": "https://scikit-learn.org/stable/modules/feature_extraction.html#text-feature-extraction"
+        },
+        {
+          "title": "scikit-learn LogisticRegression docs",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html"
+        }
+      ]
+    },
+    {
+      "title": "Named Entity Recognition (NER)",
+      "level": "🟡 Middle",
+      "explanation": "<p>NER — задача разметки токенов по типам сущностей (персона, организация, локация, дата и т.д.). Стандартная схема разметки — <b>BIO</b> (Begin/Inside/Outside): <code>B-PER</code>, <code>I-PER</code>, <code>O</code>.</p><pre><code>from transformers import pipeline\nner = pipeline('ner', model='dslim/bert-base-NER', aggregation_strategy='simple')\nresult = ner('Илон Маск работает в SpaceX в Калифорнии')\n# [{'entity_group': 'PER', 'word': 'Илон Маск', ...}, {'entity_group': 'ORG', ...}]</code></pre><p>Ключевая техническая сложность — выравнивание токенов subword-токенизатора с исходными словами и метками: одно слово может разбиться на несколько токенов, и нужно решить, какому токену присвоить метку (обычно первому, остальные — <code>-100</code>, игнорируются в loss).</p><table><tr><th>Метрика</th><th>Что измеряет</th></tr><tr><td>Entity-level F1</td><td>Точное совпадение всей сущности целиком</td></tr><tr><td>Token-level F1</td><td>По отдельным токенам (менее строго)</td></tr></table><p>Библиотека <code>seqeval</code> — стандарт для правильного entity-level подсчёта метрик. Частая ошибка — считать accuracy по токенам, что сильно завышает результат из-за преобладания класса O.</p>",
+      "links": [
+        {
+          "title": "HuggingFace Token Classification guide",
+          "url": "https://huggingface.co/docs/transformers/tasks/token_classification"
+        },
+        {
+          "title": "seqeval GitHub",
+          "url": "https://github.com/chakki-works/seqeval"
+        },
+        {
+          "title": "Named-entity recognition — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Named-entity_recognition"
+        }
+      ]
+    },
+    {
+      "title": "Sentence embeddings и семантический поиск",
+      "level": "🟡 Middle",
+      "explanation": "<p>Sentence embeddings превращают целое предложение/абзац в один вектор фиксированной размерности так, чтобы косинусное расстояние отражало семантическую близость. Обычный BERT для этого плохо подходит без дообучения — используют <b>Sentence-BERT (SBERT)</b>, обученный на парах предложений через siamese-сеть с triplet/contrastive loss.</p><pre><code>from sentence_transformers import SentenceTransformer, util\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\nemb1 = model.encode('Как приготовить пасту?')\nemb2 = model.encode('Рецепт пасты карбонара')\nsimilarity = util.cos_sim(emb1, emb2)</code></pre><p>Это основа для <b>RAG (Retrieval-Augmented Generation)</b>: документы разбиваются на чанки, кодируются в эмбеддинги, сохраняются в векторную БД (FAISS, Qdrant, pgvector), а при запросе находится top-k ближайших чанков для контекста LLM.</p><ul><li>Выбирайте размер чанка осознанно: слишком крупный — размывает релевантность, слишком мелкий — теряет контекст</li><li>Для доменных данных (медицина, юриспруденция) общие эмбеддинги работают хуже — рассмотрите fine-tuning или доменные модели</li><li>Гибридный поиск (BM25 + dense embeddings) часто надёжнее чистого semantic search</li></ul>",
+      "links": [
+        {
+          "title": "Sentence-Transformers docs",
+          "url": "https://www.sbert.net/"
+        },
+        {
+          "title": "Sentence-BERT paper (arXiv)",
+          "url": "https://arxiv.org/abs/1908.10084"
+        },
+        {
+          "title": "FAISS GitHub",
+          "url": "https://github.com/facebookresearch/faiss"
+        },
+        {
+          "title": "Retrieval-Augmented Generation paper (arXiv)",
+          "url": "https://arxiv.org/abs/2005.11401"
+        }
+      ]
+    },
+    {
+      "title": "Оценка NLP-моделей",
+      "level": "🔴 Senior",
+      "explanation": "<p>Выбор метрики критичен и сильно зависит от задачи. Для генерации текста нет единой «правильной» метрики — automated метрики лишь приближение к человеческой оценке.</p><table><tr><th>Задача</th><th>Метрики</th></tr><tr><td>Классификация</td><td>Accuracy, F1, ROC-AUC</td></tr><tr><td>NER</td><td>Entity-level F1 (seqeval)</td></tr><tr><td>Машинный перевод</td><td>BLEU, chrF, COMET</td></tr><tr><td>Суммаризация</td><td>ROUGE-1/2/L, BERTScore</td></tr><tr><td>Генерация LLM</td><td>Human eval, LLM-as-judge, MMLU/HellaSwag для general ability</td></tr></table><pre><code>from rouge_score import rouge_scorer\nscorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)\nscores = scorer.score('reference text', 'generated text')</code></pre><p>BLEU/ROUGE считают n-граммное перекрытие и плохо ловят перефразирование — BERTScore (на эмбеддингах) точнее коррелирует с человеческой оценкой. Для чат-ботов и LLM всё чаще используют <b>LLM-as-judge</b> (более мощная модель оценивает ответ по рубрике), но это чревато систематическими смещениями (bias к более длинным ответам, к своему же стилю).</p><p>Продакшн-совет: всегда держите human-in-the-loop выборку для калибровки автоматических метрик, иначе легко оптимизировать модель под метрику, а не под реальное качество (метрика Гудхарта).</p>",
+      "links": [
+        {
+          "title": "HuggingFace Evaluate library docs",
+          "url": "https://huggingface.co/docs/evaluate/index"
+        },
+        {
+          "title": "BERTScore paper (arXiv)",
+          "url": "https://arxiv.org/abs/1904.09675"
+        },
+        {
+          "title": "ROUGE paper (ACL Anthology)",
+          "url": "https://aclanthology.org/W04-1013/"
+        }
+      ]
+    },
+    {
+      "title": "Проблемы генеративных моделей: галлюцинации и bias",
+      "level": "🔴 Senior",
+      "explanation": "<p>Галлюцинации — генерация уверенно звучащих, но фактически неверных утверждений. Причина фундаментальна: LLM обучены предсказывать вероятное продолжение текста, а не проверять истинность. Смягчить, но не полностью убрать, помогают:</p><ul><li><b>RAG</b> — подмешивание проверенных фактов в контекст</li><li><b>Grounding</b> — требование цитировать источник для каждого утверждения</li><li><b>Constrained decoding</b> — ограничение генерации допустимой грамматикой/схемой (для structured output)</li><li>Fine-tuning на инструкциях с явным отказом отвечать при неуверенности («I don't know»)</li></ul><pre><code># пример structured output с ограничением схемы\nfrom pydantic import BaseModel\nclass Answer(BaseModel):\n    fact: str\n    confidence: float\n\nresponse = client.chat.completions.create(\n    model='...', response_format=Answer, messages=[...])</code></pre><p>Bias — модель наследует предвзятости обучающего корпуса (гендерные, расовые, культурные стереотипы). В продакшене это не абстрактная этика, а юридический и репутационный риск.</p><p>Практика: для критичных доменов (медицина, финансы, юриспруденция) никогда не полагайтесь на голый LLM-вывод без верификации — стройте pipeline с явными проверками, логированием и human review для edge cases, и регулярно прогоняйте red-teaming тесты на известных паттернах галлюцинаций.</p>",
+      "links": [
+        {
+          "title": "Survey of Hallucination in Natural Language Generation (arXiv)",
+          "url": "https://arxiv.org/abs/2202.03629"
+        },
+        {
+          "title": "Retrieval-Augmented Generation paper (arXiv)",
+          "url": "https://arxiv.org/abs/2005.11401"
+        },
+        {
+          "title": "Anthropic Docs — Reducing hallucinations",
+          "url": "https://docs.anthropic.com/en/docs/test-and-evaluate/strengthen-guardrails/reduce-hallucinations"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Почему BPE-токенизация лучше пословной для больших языковых моделей?",
+      "options": [
+        "Она быстрее по вычислениям",
+        "Решает проблему OOV-слов и сокращает словарь за счёт субслов",
+        "Она не требует обучения на корпусе",
+        "Работает только с английским языком"
+      ],
+      "answer": 1,
+      "explain": "BPE разбивает редкие слова на известные подслова, избегая проблемы неизвестных слов при разумном размере словаря."
+    },
+    {
+      "q": "Главное ограничение статических эмбеддингов вроде Word2Vec?",
+      "options": [
+        "Слишком большой размер векторов",
+        "Один вектор на слово независимо от контекста",
+        "Не поддерживают арифметику векторов",
+        "Требуют GPU для инференса"
+      ],
+      "answer": 1,
+      "explain": "Word2Vec даёт одинаковый вектор для слова во всех контекстах, не различая, например, разные значения омонимов."
+    },
+    {
+      "q": "Какую проблему LSTM решает по сравнению с ванильной RNN?",
+      "options": [
+        "Ускоряет параллельное обучение на GPU",
+        "Затухающий/взрывающийся градиент через гейты и ячейку памяти",
+        "Убирает необходимость в backpropagation",
+        "Позволяет обрабатывать изображения"
+      ],
+      "answer": 1,
+      "explain": "Гейты LSTM и отдельная память ячейки позволяют градиенту течь через много шагов без затухания."
+    },
+    {
+      "q": "Зачем в формуле attention делят QK^T на sqrt(d_k)?",
+      "options": [
+        "Для ускорения вычислений",
+        "Для стабилизации softmax при больших размерностях, избегая насыщения градиентов",
+        "Чтобы уменьшить число параметров",
+        "Это чисто историческая условность без эффекта"
+      ],
+      "answer": 1,
+      "explain": "Без масштабирования при больших d_k значения scores становятся очень большими, softmax насыщается, градиенты почти исчезают."
+    },
+    {
+      "q": "В чём принципиальное архитектурное отличие BERT от GPT?",
+      "options": [
+        "BERT decoder-only, GPT encoder-only",
+        "BERT двунаправленный encoder, GPT — causal (однонаправленный) decoder",
+        "BERT не использует attention",
+        "GPT не может быть дообучен"
+      ],
+      "answer": 1,
+      "explain": "BERT видит весь контекст сразу (masked LM), GPT генерирует слева направо, видя только предыдущие токены."
+    },
+    {
+      "q": "Что делает LoRA при fine-tuning больших моделей?",
+      "options": [
+        "Полностью переобучает все веса модели",
+        "Добавляет обучаемые низкоранговые матрицы, замораживая исходные веса",
+        "Заменяет attention на свёртки",
+        "Уменьшает размер словаря токенизатора"
+      ],
+      "answer": 1,
+      "explain": "LoRA обучает лишь малую долю параметров через низкоранговые адаптеры, экономя память и время при сравнимом качестве."
+    },
+    {
+      "q": "Какая метрика корректно оценивает NER-модель на уровне целых сущностей?",
+      "options": [
+        "Token-level accuracy",
+        "Entity-level F1 (например, через seqeval)",
+        "BLEU",
+        "Perplexity"
+      ],
+      "answer": 1,
+      "explain": "Entity-level F1 требует точного совпадения границ и типа всей сущности, в отличие от завышающего результат token-level accuracy."
+    },
+    {
+      "q": "Зачем нужны sentence embeddings (SBERT) в RAG-системах?",
+      "options": [
+        "Для генерации итогового текста ответа",
+        "Для кодирования запроса и документов в вектора и поиска семантически близких чанков",
+        "Для токенизации текста",
+        "Для подсчёта BLEU-метрики"
+      ],
+      "answer": 1,
+      "explain": "SBERT-эмбеддинги позволяют находить релевантные фрагменты документов по косинусной близости векторов для последующей подачи в LLM."
+    },
+    {
+      "q": "Что из перечисленного лучше всего помогает снизить галлюцинации LLM?",
+      "options": [
+        "Увеличение temperature при генерации",
+        "RAG с подмешиванием проверенных фактов и grounding с цитированием источников",
+        "Использование только greedy decoding",
+        "Уменьшение размера контекстного окна"
+      ],
+      "answer": 1,
+      "explain": "RAG и grounding дают модели проверяемые факты и требование ссылаться на них, снижая уверенную генерацию неверных утверждений."
+    },
+    {
+      "q": "Почему BLEU/ROUGE плохо подходят для оценки качественного перефразирования при суммаризации?",
+      "options": [
+        "Они слишком медленно считаются",
+        "Это n-граммные метрики, не учитывающие семантическую эквивалентность разных формулировок",
+        "Они требуют GPU",
+        "Они применимы только к классификации"
+      ],
+      "answer": 1,
+      "explain": "BLEU/ROUGE основаны на точном совпадении n-грамм, поэтому корректный перефразированный текст может получить низкий балл, хотя смысл сохранён; BERTScore лучше улавливает семантику."
+    }
+  ]
+}

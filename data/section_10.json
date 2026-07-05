@@ -1,0 +1,384 @@
+{
+  "phase": "Phase 3 — Deep Learning",
+  "section": "👁️ Computer Vision",
+  "topics": [
+    {
+      "title": "Свёртки и CNN: как работает свёрточный слой",
+      "level": "🟢 Junior",
+      "explanation": "<p>Свёртка — это скользящее скалярное произведение фильтра (ядра) с локальным участком изображения. Ключевая идея CNN — <b>разделяемые веса</b> и <b>локальная связность</b>: один и тот же фильтр применяется по всему изображению, что даёт инвариантность к сдвигу и резко сокращает число параметров по сравнению с полносвязным слоем.</p><ul><li>Размер выхода: <code>out = (in + 2*pad - kernel) / stride + 1</code></li><li>Малые фильтры (3x3) стекируются вместо больших (5x5, 7x7) — тот же рецептивный охват, меньше параметров и больше нелинейностей.</li><li>Pooling (MaxPool) снижает разрешение и даёт небольшую инвариантность к сдвигу, но в современных архитектурах его часто заменяют strided-свёртками.</li></ul><pre><code>import torch.nn as nn\n\nblock = nn.Sequential(\n    nn.Conv2d(3, 64, kernel_size=3, padding=1),\n    nn.BatchNorm2d(64),\n    nn.ReLU(inplace=True),\n    nn.MaxPool2d(2)\n)</code></pre><p>Частая ошибка новичков — забыть про <code>padding</code>, из-за чего размер карты признаков «съедается» на каждом слое и в глубоких сетях можно дойти до нулевого размера. Также не забывайте <code>BatchNorm</code> перед активацией — это стандарт для стабильного обучения CNN.</p>",
+      "links": [
+        {
+          "title": "CS231n: CNN for Visual Recognition",
+          "url": "https://cs231n.github.io/convolutional-networks/"
+        },
+        {
+          "title": "PyTorch nn.Conv2d docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html"
+        },
+        {
+          "title": "Convolutional Neural Network — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Convolutional_neural_network"
+        }
+      ]
+    },
+    {
+      "title": "Классические архитектуры: ResNet, EfficientNet",
+      "level": "🟢 Junior",
+      "explanation": "<p>ResNet (2015) решил проблему деградации глубоких сетей с помощью <b>residual connections</b>: <code>y = F(x) + x</code>. Это позволяет градиенту течь напрямую через skip-connection, что делает возможным обучение сетей глубиной 50-150+ слоёв.</p><pre><code>class ResidualBlock(nn.Module):\n    def forward(self, x):\n        out = self.conv2(self.relu(self.conv1(x)))\n        return self.relu(out + self.shortcut(x))</code></pre><p>EfficientNet (2019) предложил <b>compound scaling</b> — одновременное и сбалансированное масштабирование глубины, ширины и разрешения входа по формуле с единым коэффициентом φ, вместо того чтобы масштабировать что-то одно. Результат — семейство B0-B7 с лучшим соотношением accuracy/FLOPs.</p><table><tr><th>Архитектура</th><th>Параметры</th><th>Когда использовать</th></tr><tr><td>ResNet-50</td><td>~25M</td><td>Универсальный baseline, много готовых чекпоинтов</td></tr><tr><td>EfficientNet-B0</td><td>~5M</td><td>Мобильные/edge устройства, ограниченный compute</td></tr></table><p>На практике: для нового проекта почти всегда начинайте с готового backbone из <code>timm</code>, а не пишите архитектуру с нуля.</p>",
+      "links": [
+        {
+          "title": "Deep Residual Learning (ResNet paper)",
+          "url": "https://arxiv.org/abs/1512.03385"
+        },
+        {
+          "title": "EfficientNet paper",
+          "url": "https://arxiv.org/abs/1905.11946"
+        },
+        {
+          "title": "timm (PyTorch Image Models)",
+          "url": "https://huggingface.co/docs/timm/index"
+        }
+      ]
+    },
+    {
+      "title": "Transfer learning и fine-tuning",
+      "level": "🟢 Junior",
+      "explanation": "<p>Transfer learning — использование весов, предобученных на большом датасете (обычно ImageNet), для решения новой задачи с малым количеством данных. Два основных режима:</p><ul><li><b>Feature extraction</b> — замораживаем backbone, обучаем только новую голову.</li><li><b>Fine-tuning</b> — размораживаем часть или все слои и дообучаем с маленьким learning rate.</li></ul><pre><code>import timm\nmodel = timm.create_model('resnet50', pretrained=True, num_classes=10)\n\nfor param in model.parameters():\n    param.requires_grad = False\nfor param in model.fc.parameters():\n    param.requires_grad = True\n\n# discriminative learning rates\noptimizer = torch.optim.Adam([\n    {'params': model.layer4.parameters(), 'lr': 1e-4},\n    {'params': model.fc.parameters(), 'lr': 1e-3},\n])</code></pre><p>Типичная ошибка продакшена — забыть переключить <code>BatchNorm</code> в eval-режим при заморозке (иначе running stats продолжают обновляться на маленьком батче и «плывут»). Также при малом датасете (&lt;1000 изображений на класс) не размораживайте весь backbone сразу — начните с головы, затем постепенно open-up слои (gradual unfreezing).</p>",
+      "links": [
+        {
+          "title": "PyTorch Transfer Learning Tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html"
+        },
+        {
+          "title": "timm docs",
+          "url": "https://huggingface.co/docs/timm/index"
+        },
+        {
+          "title": "CS231n: Transfer Learning",
+          "url": "https://cs231n.github.io/transfer-learning/"
+        }
+      ]
+    },
+    {
+      "title": "Классификация изображений: пайплайн end-to-end",
+      "level": "🟢 Junior",
+      "explanation": "<p>Стандартный пайплайн: загрузка данных → аугментации → forward/backward → метрики → сохранение чекпоинта. Ключевое — правильно разделить train/val/test и не допустить утечки данных (например, дубликаты изображений в разных сплитах).</p><pre><code>from torch.utils.data import DataLoader\nfrom torchvision import datasets, transforms\n\ntransform = transforms.Compose([\n    transforms.Resize((224, 224)),\n    transforms.ToTensor(),\n    transforms.Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])\n])\n\ntrain_ds = datasets.ImageFolder('data/train', transform=transform)\nloader = DataLoader(train_ds, batch_size=32, shuffle=True, num_workers=4)</code></pre><p>Метрики: accuracy подходит для сбалансированных данных, но при дисбалансе классов используйте <code>F1</code>, <code>precision/recall</code> или <code>balanced accuracy</code>. Всегда стройте confusion matrix — она быстро покажет, какие классы система систематически путает.</p><p>Совет из продакшена: сохраняйте не только веса лучшей модели по val-loss, но и по целевой бизнес-метрике — это разные вещи, и часто лучшая по loss модель не оптимальна для реального use-case.</p>",
+      "links": [
+        {
+          "title": "PyTorch torchvision.datasets docs",
+          "url": "https://pytorch.org/vision/stable/datasets.html"
+        },
+        {
+          "title": "scikit-learn: Model evaluation",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html"
+        },
+        {
+          "title": "PyTorch DataLoader docs",
+          "url": "https://pytorch.org/docs/stable/data.html"
+        }
+      ]
+    },
+    {
+      "title": "Детекция объектов: YOLO и семейство single-stage детекторов",
+      "level": "🟡 Middle",
+      "explanation": "<p>YOLO (You Only Look Once) решает детекцию как единую регрессионную задачу: сетка предсказывает bounding box'ы, confidence и классы за один проход, в отличие от двухстадийных детекторов (Faster R-CNN), где сначала генерируются region proposals.</p><ul><li><b>Anchor boxes</b> — заранее заданные формы боксов-кандидатов, относительно которых предсказываются смещения.</li><li><b>NMS (Non-Max Suppression)</b> — убирает дублирующиеся боксы по IoU-порогу.</li><li>Метрика качества — <code>mAP@0.5</code> или <code>mAP@0.5:0.95</code> (COCO-style).</li></ul><pre><code>from ultralytics import YOLO\n\nmodel = YOLO('yolov8n.pt')\nmodel.train(data='dataset.yaml', epochs=50, imgsz=640)\nresults = model.predict('image.jpg', conf=0.25)</code></pre><p>Частые продакшн-проблемы: маленькие объекты плохо детектируются на низком разрешении входа — увеличивайте <code>imgsz</code> или используйте FPN-архитектуры с multi-scale features. Также следите за балансом классов в разметке — редкие классы часто получают низкий recall, помогает focal loss или oversampling.</p>",
+      "links": [
+        {
+          "title": "Ultralytics YOLO docs",
+          "url": "https://docs.ultralytics.com/"
+        },
+        {
+          "title": "You Only Look Once (YOLO paper)",
+          "url": "https://arxiv.org/abs/1506.02640"
+        },
+        {
+          "title": "Faster R-CNN paper",
+          "url": "https://arxiv.org/abs/1506.01497"
+        }
+      ]
+    },
+    {
+      "title": "Семантическая и инстанс-сегментация",
+      "level": "🟡 Middle",
+      "explanation": "<p>Семантическая сегментация присваивает класс каждому пикселю (U-Net, DeepLab), инстанс-сегментация дополнительно различает отдельные объекты одного класса (Mask R-CNN, YOLOv8-seg).</p><p>U-Net — классическая encoder-decoder архитектура со skip-connections между симметричными уровнями, которые передают детализированную пространственную информацию из encoder напрямую в decoder, компенсируя потерю деталей при downsampling.</p><pre><code>import segmentation_models_pytorch as smp\n\nmodel = smp.Unet(\n    encoder_name='resnet34',\n    encoder_weights='imagenet',\n    in_channels=3,\n    classes=5\n)\nloss_fn = smp.losses.DiceLoss(mode='multiclass')</code></pre><p>Метрика — <b>IoU (Jaccard)</b> и <b>Dice coefficient</b>, а не accuracy: при сильном дисбалансе фон/объект (например, медицинские снимки) accuracy будет вводящей в заблуждение — модель, предсказывающая только фон, получит высокий accuracy, но нулевой IoU по целевому классу. Комбинируйте <code>Dice + CrossEntropy</code> loss для стабильного обучения.</p>",
+      "links": [
+        {
+          "title": "U-Net paper",
+          "url": "https://arxiv.org/abs/1505.04597"
+        },
+        {
+          "title": "Mask R-CNN paper",
+          "url": "https://arxiv.org/abs/1703.06870"
+        },
+        {
+          "title": "segmentation_models.pytorch docs",
+          "url": "https://smp.readthedocs.io/"
+        }
+      ]
+    },
+    {
+      "title": "Vision Transformers (ViT)",
+      "level": "🔴 Senior",
+      "explanation": "<p>ViT (2020) рассматривает изображение как последовательность патчей (например, 16x16 пикселей), линейно проецирует их в эмбеддинги и подаёт в стандартный Transformer encoder — без свёрток вообще.</p><ul><li>Patch embedding + позиционные эмбеддинги (нет встроенной трансляционной инвариантности, как у CNN — модель должна выучить это сама).</li><li>Требует <b>значительно больше данных</b> для обучения с нуля, чем CNN, из-за отсутствия indutive bias; на маленьких датасетах ViT проигрывает CNN без предобучения.</li><li>Swin Transformer вводит иерархию и локальные окна внимания — ближе к CNN по духу, эффективнее по compute.</li></ul><pre><code>import timm\nmodel = timm.create_model('vit_base_patch16_224', pretrained=True, num_classes=100)</code></pre><p>На практике: если у вас датасет &lt;100k изображений, предпочитайте предобученный ViT или гибрид (ConvNeXt), а не обучение ViT с нуля. Также ViT более чувствителен к качеству аугментаций — стандартный рецепт включает MixUp, CutMix, RandAugment и Stochastic Depth.</p>",
+      "links": [
+        {
+          "title": "An Image is Worth 16x16 Words (ViT paper)",
+          "url": "https://arxiv.org/abs/2010.11929"
+        },
+        {
+          "title": "Swin Transformer paper",
+          "url": "https://arxiv.org/abs/2103.14030"
+        },
+        {
+          "title": "timm docs (ViT models)",
+          "url": "https://huggingface.co/docs/timm/index"
+        }
+      ]
+    },
+    {
+      "title": "Аугментации изображений: albumentations",
+      "level": "🟡 Middle",
+      "explanation": "<p>Аугментации искусственно увеличивают разнообразие обучающих данных и снижают переобучение. Библиотека <code>albumentations</code> быстрее torchvision (использует OpenCV) и умеет синхронно трансформировать изображение, маски, боксы и ключевые точки.</p><pre><code>import albumentations as A\nfrom albumentations.pytorch import ToTensorV2\n\ntransform = A.Compose([\n    A.RandomResizedCrop(224, 224, scale=(0.8, 1.0)),\n    A.HorizontalFlip(p=0.5),\n    A.ColorJitter(brightness=0.2, contrast=0.2, p=0.5),\n    A.GaussNoise(p=0.2),\n    A.Normalize(),\n    ToTensorV2()\n], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))</code></pre><p>Правило продакшена: аугментации должны отражать реальную вариативность продакшн-данных, а не произвольный набор. Например, вертикальный флип уместен для спутниковых снимков, но бессмысленен и вреден для фото людей. Тестовое время аугментаций (TTA — усреднение предсказаний по нескольким аугментированным версиям входа) часто даёт +0.5-1% accuracy почти бесплатно.</p>",
+      "links": [
+        {
+          "title": "Albumentations documentation",
+          "url": "https://albumentations.ai/docs/"
+        },
+        {
+          "title": "RandAugment paper",
+          "url": "https://arxiv.org/abs/1909.13719"
+        },
+        {
+          "title": "torchvision.transforms docs",
+          "url": "https://pytorch.org/vision/stable/transforms.html"
+        }
+      ]
+    },
+    {
+      "title": "CLIP и мультимодальные модели",
+      "level": "🔴 Senior",
+      "explanation": "<p>CLIP (Contrastive Language-Image Pretraining) обучается на парах (изображение, текст) с помощью contrastive loss: эмбеддинги совпадающих пар сближаются, несовпадающих — отдаляются, в общем векторном пространстве.</p><pre><code>import clip\nimport torch\n\nmodel, preprocess = clip.load('ViT-B/32')\nimage = preprocess(pil_image).unsqueeze(0)\ntext = clip.tokenize(['a photo of a cat', 'a photo of a dog'])\n\nwith torch.no_grad():\n    image_features = model.encode_image(image)\n    text_features = model.encode_text(text)\n    logits = (image_features @ text_features.T).softmax(dim=-1)</code></pre><p>Ключевое применение — <b>zero-shot классификация</b> без дообучения: достаточно сформулировать классы текстом. CLIP также лежит в основе image search (semantic similarity через векторные БД) и как text encoder внутри диффузионных моделей (Stable Diffusion).</p><p>Ограничение: CLIP плохо справляется с подсчётом объектов, пространственными отношениями и мелкими деталями — не полагайтесь на него в задачах, требующих точной геометрии.</p>",
+      "links": [
+        {
+          "title": "CLIP paper",
+          "url": "https://arxiv.org/abs/2103.00020"
+        },
+        {
+          "title": "OpenAI CLIP GitHub",
+          "url": "https://github.com/openai/CLIP"
+        },
+        {
+          "title": "Hugging Face CLIP docs",
+          "url": "https://huggingface.co/docs/transformers/model_doc/clip"
+        }
+      ]
+    },
+    {
+      "title": "Генерация изображений: диффузионные модели (основы)",
+      "level": "🔴 Senior",
+      "explanation": "<p>Диффузионные модели генерируют изображение через постепенное <b>устранение шума</b>: forward process добавляет гауссов шум к изображению за T шагов, а нейросеть (обычно U-Net) обучается предсказывать этот шум на reverse process, шаг за шагом восстанавливая изображение из чистого шума.</p><ul><li><b>Latent Diffusion (Stable Diffusion)</b> работает не в пиксельном пространстве, а в сжатом латентном (через VAE-encoder), что резко снижает вычислительные затраты.</li><li>Text-conditioning реализуется через cross-attention с текстовыми эмбеддингами (обычно из CLIP text encoder).</li><li><b>Classifier-free guidance</b> — техника усиления соответствия промпту за счёт интерполяции между условной и безусловной генерацией.</li></ul><pre><code>from diffusers import StableDiffusionPipeline\nimport torch\n\npipe = StableDiffusionPipeline.from_pretrained(\n    'runwayml/stable-diffusion-v1-5', torch_dtype=torch.float16\n).to('cuda')\nimage = pipe('a cyberpunk city at night', guidance_scale=7.5).images[0]</code></pre><p>Продакшн-нюанс: инференс диффузии дорог (десятки шагов denoising), поэтому в проде используют ускоренные семплеры (DPM-Solver++) и дистиллированные модели (LCM, Turbo) для near-realtime генерации.</p>",
+      "links": [
+        {
+          "title": "Denoising Diffusion Probabilistic Models paper",
+          "url": "https://arxiv.org/abs/2006.11239"
+        },
+        {
+          "title": "High-Resolution Image Synthesis (Latent Diffusion paper)",
+          "url": "https://arxiv.org/abs/2112.10752"
+        },
+        {
+          "title": "Hugging Face Diffusers docs",
+          "url": "https://huggingface.co/docs/diffusers/index"
+        }
+      ]
+    },
+    {
+      "title": "OCR: распознавание текста на изображениях",
+      "level": "🟡 Middle",
+      "explanation": "<p>Современный OCR-пайплайн обычно состоит из двух этапов: <b>text detection</b> (найти области с текстом, часто через сегментацию/боксы) и <b>text recognition</b> (распознать символы внутри найденной области, часто через CRNN + CTC loss или Transformer-decoder).</p><pre><code>import easyocr\n\nreader = easyocr.Reader(['ru', 'en'])\nresults = reader.readtext('document.jpg')\nfor bbox, text, confidence in results:\n    print(text, confidence)</code></pre><p>Готовые решения: <code>Tesseract</code> (классика, слабее на сложных сценах), <code>EasyOCR</code>/<code>PaddleOCR</code> (deep learning, лучше на естественных сценах), облачные API (Google Vision, Yandex Vision) для продакшена без своей инфраструктуры.</p><table><tr><th>Задача</th><th>Инструмент</th></tr><tr><td>Сканы документов</td><td>Tesseract + preprocessing (deskew, binarization)</td></tr><tr><td>Фото в дикой природе (вывески, чеки)</td><td>PaddleOCR / EasyOCR</td></tr></table><p>Совет: качество OCR сильно зависит от препроцессинга — контраст, выравнивание угла наклона (deskew) и удаление шума часто дают больше прироста, чем смена модели.</p>",
+      "links": [
+        {
+          "title": "EasyOCR GitHub",
+          "url": "https://github.com/JaidedAI/EasyOCR"
+        },
+        {
+          "title": "PaddleOCR GitHub",
+          "url": "https://github.com/PaddlePaddle/PaddleOCR"
+        },
+        {
+          "title": "Tesseract OCR docs",
+          "url": "https://tesseract-ocr.github.io/"
+        }
+      ]
+    },
+    {
+      "title": "Деплой CV-моделей: ONNX, TensorRT, квантизация",
+      "level": "🔴 Senior",
+      "explanation": "<p>Для продакшн-инференса PyTorch-модель обычно конвертируют в оптимизированный формат: <b>ONNX</b> для кроссплатформенности, <b>TensorRT</b> для максимальной скорости на NVIDIA GPU, <b>TFLite/CoreML</b> для мобильных устройств.</p><pre><code>import torch\n\ndummy_input = torch.randn(1, 3, 224, 224)\ntorch.onnx.export(\n    model, dummy_input, 'model.onnx',\n    input_names=['input'], output_names=['output'],\n    dynamic_axes={'input': {0: 'batch'}}\n)\n\n# инференс через onnxruntime\nimport onnxruntime as ort\nsession = ort.InferenceSession('model.onnx', providers=['CUDAExecutionProvider'])\noutput = session.run(None, {'input': dummy_input.numpy()})</code></pre><p>Квантизация (INT8 вместо FP32) даёт 2-4x ускорение и снижение памяти почти без потери точности, если сделана правильно (post-training static quantization с калибровочным датасетом, а не naive round). Динамический батчинг и warmup GPU перед замером latency обязательны — иначе бенчмарк соврёт.</p><p>Частая ошибка: тестировать latency модели без учёта preprocessing/postprocessing (resize, NMS) — в реальном сервисе они нередко занимают больше времени, чем сам forward pass.</p>",
+      "links": [
+        {
+          "title": "ONNX documentation",
+          "url": "https://onnx.ai/onnx/"
+        },
+        {
+          "title": "PyTorch ONNX export docs",
+          "url": "https://pytorch.org/docs/stable/onnx.html"
+        },
+        {
+          "title": "NVIDIA TensorRT docs",
+          "url": "https://docs.nvidia.com/deeplearning/tensorrt/"
+        }
+      ]
+    },
+    {
+      "title": "Метрики и лоссы в CV: IoU, mAP, focal loss",
+      "level": "🟡 Middle",
+      "explanation": "<p>Правильный выбор метрики и loss критичен для CV-задач с несбалансированными данными.</p><ul><li><b>IoU (Intersection over Union)</b> — пересечение боксов/масок делённое на объединение; основа для NMS и метрик детекции/сегментации.</li><li><b>mAP</b> — усреднённая precision по всем классам и уровням IoU-порога, стандарт для сравнения детекторов (COCO benchmark).</li><li><b>Focal Loss</b> — модификация cross-entropy, которая понижает вес «лёгких» примеров и фокусирует обучение на сложных, решая проблему дисбаланса foreground/background в детекции.</li></ul><pre><code>def focal_loss(pred, target, gamma=2.0, alpha=0.25):\n    ce = F.binary_cross_entropy_with_logits(pred, target, reduction='none')\n    p_t = torch.exp(-ce)\n    loss = alpha * (1 - p_t) ** gamma * ce\n    return loss.mean()</code></pre><p>Практика: перед выбором метрики всегда спрашивайте, что важнее бизнесу — recall (не пропустить дефект на конвейере) или precision (не заваливать оператора ложными тревогами), и подбирайте threshold по PR-кривой, а не используйте дефолтные 0.5.</p>",
+      "links": [
+        {
+          "title": "Focal Loss paper (RetinaNet)",
+          "url": "https://arxiv.org/abs/1708.02002"
+        },
+        {
+          "title": "COCO evaluation metrics",
+          "url": "https://cocodataset.org/#detection-eval"
+        },
+        {
+          "title": "scikit-learn: Model evaluation",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html"
+        }
+      ]
+    },
+    {
+      "title": "Работа с несбалансированными и малыми датасетами в CV",
+      "level": "🟡 Middle",
+      "explanation": "<p>Реальные CV-датасеты редко бывают идеально сбалансированными и большими. Основные стратегии:</p><ul><li><b>Oversampling/undersampling</b> редких/частых классов через <code>WeightedRandomSampler</code>.</li><li><b>Синтетические данные</b>: копипаст-аугментации (Copy-Paste для сегментации), генерация через диффузионные модели для редких классов.</li><li><b>Few-shot / self-supervised предобучение</b> (SimCLR, DINO) когда размеченных данных мало, но много неразмеченных.</li></ul><pre><code>from torch.utils.data import WeightedRandomSampler\n\nclass_counts = [500, 50, 20]\nweights = [1.0 / class_counts[label] for label in labels]\nsampler = WeightedRandomSampler(weights, num_samples=len(weights))\nloader = DataLoader(dataset, batch_size=32, sampler=sampler)</code></pre><p>Важно: активно валидируйте на репрезентативном hold-out наборе, отражающем реальное распределение классов в продакшене — иначе oversampling редких классов может создать иллюзию хорошего качества, которая не подтвердится в проде.</p>",
+      "links": [
+        {
+          "title": "PyTorch WeightedRandomSampler docs",
+          "url": "https://pytorch.org/docs/stable/data.html#torch.utils.data.WeightedRandomSampler"
+        },
+        {
+          "title": "SimCLR paper",
+          "url": "https://arxiv.org/abs/2002.05709"
+        },
+        {
+          "title": "DINO paper",
+          "url": "https://arxiv.org/abs/2104.14294"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Зачем в CNN используют skip-connections (как в ResNet)?",
+      "options": [
+        "Чтобы уменьшить размер изображения быстрее",
+        "Чтобы градиент мог течь напрямую через блоки, облегчая обучение глубоких сетей",
+        "Чтобы заменить BatchNorm",
+        "Чтобы ускорить инференс на CPU"
+      ],
+      "answer": 1,
+      "explain": "Residual connections решают проблему затухания градиента и деградации точности в очень глубоких сетях."
+    },
+    {
+      "q": "Что делает compound scaling в EfficientNet?",
+      "options": [
+        "Масштабирует только количество слоёв",
+        "Одновременно и сбалансированно масштабирует глубину, ширину и разрешение входа",
+        "Заменяет свёртки на attention",
+        "Уменьшает batch size во время обучения"
+      ],
+      "answer": 1,
+      "explain": "Compound scaling использует единый коэффициент для согласованного увеличения всех трёх измерений сети."
+    },
+    {
+      "q": "В чём принципиальное отличие fine-tuning от feature extraction при transfer learning?",
+      "options": [
+        "Fine-tuning не использует предобученные веса вовсе",
+        "При fine-tuning дообучаются (размораживаются) веса backbone, а не только новая голова",
+        "Feature extraction требует больше данных",
+        "Разницы нет, это синонимы"
+      ],
+      "answer": 1,
+      "explain": "Feature extraction замораживает backbone и обучает только голову; fine-tuning дообучает часть или весь backbone с малым LR."
+    },
+    {
+      "q": "Для чего в детекции объектов применяется NMS (Non-Max Suppression)?",
+      "options": [
+        "Для нормализации входного изображения",
+        "Для увеличения количества anchor boxes",
+        "Для удаления дублирующихся боксов с высоким IoU, оставляя лучший по confidence",
+        "Для аугментации данных"
+      ],
+      "answer": 2,
+      "explain": "NMS убирает избыточные перекрывающиеся предсказания одного и того же объекта."
+    },
+    {
+      "q": "Почему accuracy — плохая метрика для сегментации при сильном дисбалансе фон/объект?",
+      "options": [
+        "Accuracy вообще нельзя посчитать для сегментации",
+        "Модель, предсказывающая только фон, может получить высокий accuracy при нулевом качестве по целевому классу",
+        "Accuracy требует GPU для расчёта",
+        "Accuracy применима только к детекции"
+      ],
+      "answer": 1,
+      "explain": "При дисбалансе классов IoU/Dice гораздо информативнее accuracy, которая маскирует плохую работу по редкому классу."
+    },
+    {
+      "q": "Чем ViT принципиально отличается от CNN в обработке изображения?",
+      "options": [
+        "ViT использует только пулинг, без свёрток и внимания",
+        "ViT делит изображение на патчи и обрабатывает их как последовательность через self-attention, без свёрток",
+        "ViT работает только с чёрно-белыми изображениями",
+        "ViT не требует предобучения на больших датасетах"
+      ],
+      "answer": 1,
+      "explain": "ViT рассматривает патчи изображения как токены последовательности и применяет стандартный Transformer encoder."
+    },
+    {
+      "q": "Что оптимизирует CLIP при обучении на парах изображение-текст?",
+      "options": [
+        "Contrastive loss, сближающий эмбеддинги совпадающих пар и отдаляющий несовпадающие",
+        "Cross-entropy loss на классах ImageNet",
+        "Reconstruction loss как в автоэнкодере",
+        "Focal loss для детекции"
+      ],
+      "answer": 0,
+      "explain": "CLIP учится общему эмбеддинг-пространству через contrastive объектив, что даёт возможность zero-shot классификации."
+    },
+    {
+      "q": "Что делает Latent Diffusion (Stable Diffusion) эффективнее классической пиксельной диффузии?",
+      "options": [
+        "Использует меньше шагов denoising всегда",
+        "Работает в сжатом латентном пространстве через VAE, а не напрямую в пикселях",
+        "Не использует U-Net",
+        "Обучается без текстовых промптов"
+      ],
+      "answer": 1,
+      "explain": "Работа в латентном пространстве резко снижает вычислительные затраты по сравнению с пиксельной диффузией."
+    },
+    {
+      "q": "Почему квантизация модели (FP32 → INT8) полезна для деплоя CV-моделей?",
+      "options": [
+        "Она всегда повышает точность модели",
+        "Она даёт ускорение и снижение потребления памяти почти без потери точности при правильной калибровке",
+        "Она заменяет необходимость в GPU",
+        "Она автоматически увеличивает batch size"
+      ],
+      "answer": 1,
+      "explain": "Post-training static quantization с калибровочным датасетом даёт 2-4x ускорение при минимальной потере accuracy."
+    },
+    {
+      "q": "Зачем нужен Focal Loss в задачах детекции объектов?",
+      "options": [
+        "Чтобы ускорить сходимость на сбалансированных данных",
+        "Чтобы полностью заменить NMS",
+        "Чтобы снизить вес легко классифицируемых примеров и сфокусировать обучение на сложных, решая дисбаланс foreground/background",
+        "Чтобы уменьшить размер модели"
+      ],
+      "answer": 2,
+      "explain": "Focal Loss модифицирует cross-entropy, понижая вклад лёгких примеров, что помогает при сильном дисбалансе классов."
+    }
+  ]
+}

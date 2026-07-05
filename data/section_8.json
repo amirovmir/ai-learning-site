@@ -1,0 +1,387 @@
+{
+  "phase": "Phase 3 — Deep Learning",
+  "section": "🧠 Нейросети и PyTorch",
+  "topics": [
+    {
+      "title": "Перцептрон и многослойный персептрон (MLP)",
+      "level": "🟢 Junior",
+      "explanation": "<p>MLP — базовая архитектура: слои линейных преобразований <code>y = Wx + b</code>, между которыми стоят нелинейные функции активации. Без нелинейности стек линейных слоёв эквивалентен одному линейному слою — это частая ошибка новичков, забывающих активацию между <code>nn.Linear</code>.</p><ul><li>Входной слой — размер равен числу признаков</li><li>Скрытые слои — учат нелинейные комбинации признаков</li><li>Выходной слой — под задачу (1 нейрон для регрессии, N для классификации)</li></ul><pre><code>import torch.nn as nn\n\nmodel = nn.Sequential(\n    nn.Linear(784, 128),\n    nn.ReLU(),\n    nn.Linear(128, 64),\n    nn.ReLU(),\n    nn.Linear(64, 10)\n)</code></pre><p>Совет: начинайте с простого MLP как baseline перед CNN/Transformer — часто разница в качестве меньше, чем ожидается, а дебажить проще.</p>",
+      "links": [
+        {
+          "title": "PyTorch nn.Sequential docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Sequential.html"
+        },
+        {
+          "title": "PyTorch nn.Linear docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Linear.html"
+        },
+        {
+          "title": "Deep Learning book (Goodfellow et al.)",
+          "url": "https://www.deeplearningbook.org/"
+        },
+        {
+          "title": "Multilayer perceptron — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Multilayer_perceptron"
+        }
+      ]
+    },
+    {
+      "title": "Функции активации (ReLU, Sigmoid, Tanh, GELU)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Активации вносят нелинейность и сильно влияют на скорость сходимости и градиенты.</p><table><tr><th>Функция</th><th>Диапазон</th><th>Проблема</th></tr><tr><td>Sigmoid</td><td>(0,1)</td><td>затухающий градиент</td></tr><tr><td>Tanh</td><td>(-1,1)</td><td>затухающий градиент</td></tr><tr><td>ReLU</td><td>[0,∞)</td><td>'dying ReLU'</td></tr><tr><td>GELU/SiLU</td><td>≈(-0.2,∞)</td><td>дороже вычислительно</td></tr></table><pre><code>import torch\nx = torch.randn(5)\ntorch.relu(x)\ntorch.nn.functional.gelu(x)</code></pre><p>Типичная ошибка: использовать Sigmoid в скрытых слоях глубокой сети — градиент затухает экспоненциально с числом слоёв. В продакшене для трансформеров сейчас чаще берут GELU или SwiGLU, для CNN — ReLU/LeakyReLU.</p>",
+      "links": [
+        {
+          "title": "torch.nn — Non-linear activations",
+          "url": "https://pytorch.org/docs/stable/nn.html#non-linear-activations-weighted-sum-nonlinearity"
+        },
+        {
+          "title": "GELU paper (arXiv)",
+          "url": "https://arxiv.org/abs/1606.08415"
+        },
+        {
+          "title": "Activation function — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Activation_function"
+        }
+      ]
+    },
+    {
+      "title": "Forward pass",
+      "level": "🟢 Junior",
+      "explanation": "<p>Forward pass — последовательное вычисление выхода сети по входу, слой за слоем. В PyTorch реализуется в методе <code>forward()</code> класса <code>nn.Module</code>.</p><pre><code>class Net(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.fc1 = nn.Linear(10, 20)\n        self.fc2 = nn.Linear(20, 1)\n\n    def forward(self, x):\n        x = torch.relu(self.fc1(x))\n        return self.fc2(x)\n\nmodel = Net()\nout = model(x)  # вызывает forward автоматически</code></pre><p>Важно: никогда не вызывайте <code>model.forward(x)</code> напрямую — используйте <code>model(x)</code>, потому что <code>__call__</code> дополнительно запускает хуки (например, для gradient checkpointing или отладки).</p>",
+      "links": [
+        {
+          "title": "PyTorch nn.Module docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Module.html"
+        },
+        {
+          "title": "PyTorch Learn the Basics — Build Model",
+          "url": "https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html"
+        }
+      ]
+    },
+    {
+      "title": "Backward pass и backpropagation",
+      "level": "🟡 Middle",
+      "explanation": "<p>Backpropagation — вычисление градиентов функции потерь по всем параметрам через цепное правило дифференцирования, начиная с выхода и двигаясь к входу.</p><pre><code>loss = criterion(output, target)\nloss.backward()  # считает d(loss)/d(param) для всех параметров</code></pre><p>Ключевые моменты:</p><ul><li>Градиенты накапливаются (<code>+=</code>), поэтому перед каждым шагом нужен <code>optimizer.zero_grad()</code></li><li>Граф вычислений строится динамически (define-by-run) — можно использовать if/for в forward</li><li>Проблема exploding/vanishing gradients в глубоких сетях решается нормализацией, skip-connections, gradient clipping</li></ul><p>Частая ошибка джуниора: забыть <code>zero_grad()</code> — градиенты суммируются между батчами, и модель &laquo;не учится&raquo; без видимой причины.</p>",
+      "links": [
+        {
+          "title": "PyTorch Autograd mechanics",
+          "url": "https://pytorch.org/docs/stable/notes/autograd.html"
+        },
+        {
+          "title": "CS231n: Backpropagation",
+          "url": "https://cs231n.github.io/optimization-2/"
+        },
+        {
+          "title": "Backpropagation — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Backpropagation"
+        }
+      ]
+    },
+    {
+      "title": "Тензоры PyTorch",
+      "level": "🟢 Junior",
+      "explanation": "<p>Тензор — многомерный массив с поддержкой GPU и автодифференцирования. Основа всей работы в PyTorch.</p><pre><code>import torch\nx = torch.tensor([1.0, 2.0, 3.0])\nx = torch.zeros(3, 4)\nx = torch.randn(2, 3, requires_grad=True)\nprint(x.shape, x.dtype, x.device)</code></pre><ul><li><code>.view()</code>/<code>.reshape()</code> — изменение формы без копирования данных (если возможно)</li><li><code>.to(device)</code> — перенос на GPU/CPU</li><li>broadcasting работает как в NumPy</li></ul><p>Совет: следите за <code>dtype</code> — смешение <code>float32</code> и <code>float64</code> вызывает ошибки типов, а float16/bfloat16 нужны для эффективного обучения на GPU.</p>",
+      "links": [
+        {
+          "title": "PyTorch Tensors tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/basics/tensorqs_tutorial.html"
+        },
+        {
+          "title": "torch.Tensor docs",
+          "url": "https://pytorch.org/docs/stable/tensors.html"
+        },
+        {
+          "title": "NumPy documentation",
+          "url": "https://numpy.org/doc/"
+        }
+      ]
+    },
+    {
+      "title": "Autograd — автоматическое дифференцирование",
+      "level": "🟡 Middle",
+      "explanation": "<p>Autograd строит динамический граф вычислений и автоматически считает градиенты через <code>.backward()</code>.</p><pre><code>x = torch.tensor(2.0, requires_grad=True)\ny = x**2 + 3*x\ny.backward()\nprint(x.grad)  # dy/dx = 2x+3 = 7.0</code></pre><ul><li><code>requires_grad=True</code> включает отслеживание операций</li><li><code>with torch.no_grad():</code> отключает граф — используется при инференсе и валидации, экономит память</li><li><code>.detach()</code> отсоединяет тензор от графа</li></ul><p>Типичная ошибка в продакшене: забыть <code>torch.no_grad()</code> на инференсе — память растёт и накапливается неиспользуемый граф, особенно заметно на больших батчах.</p>",
+      "links": [
+        {
+          "title": "PyTorch Autograd tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html"
+        },
+        {
+          "title": "Autograd mechanics notes",
+          "url": "https://pytorch.org/docs/stable/notes/autograd.html"
+        }
+      ]
+    },
+    {
+      "title": "nn.Module — построение архитектур",
+      "level": "🟡 Middle",
+      "explanation": "<p><code>nn.Module</code> — базовый класс для всех слоёв и моделей. Инкапсулирует параметры, подмодули и логику forward.</p><pre><code>class MyModel(nn.Module):\n    def __init__(self):\n        super().__init__()\n        self.layers = nn.Sequential(\n            nn.Linear(10, 32), nn.ReLU(),\n            nn.Linear(32, 1)\n        )\n\n    def forward(self, x):\n        return self.layers(x)\n\nmodel = MyModel()\nprint(sum(p.numel() for p in model.parameters()))</code></pre><ul><li>Всегда вызывайте <code>super().__init__()</code> первым — иначе параметры не зарегистрируются</li><li><code>model.train()</code> / <code>model.eval()</code> переключают поведение Dropout и BatchNorm</li><li>Забытый <code>model.eval()</code> перед инференсом — классическая причина нестабильных предсказаний из-за активного Dropout</li></ul>",
+      "links": [
+        {
+          "title": "PyTorch nn.Module docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Module.html"
+        },
+        {
+          "title": "PyTorch nn package tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/pytorch_with_examples.html"
+        }
+      ]
+    },
+    {
+      "title": "Dataset и DataLoader",
+      "level": "🟡 Middle",
+      "explanation": "<p><code>Dataset</code> описывает, как получить один пример, <code>DataLoader</code> — как собирать батчи, шаффлить и параллелить загрузку.</p><pre><code>from torch.utils.data import Dataset, DataLoader\n\nclass MyDataset(Dataset):\n    def __init__(self, data, labels):\n        self.data, self.labels = data, labels\n    def __len__(self):\n        return len(self.data)\n    def __getitem__(self, idx):\n        return self.data[idx], self.labels[idx]\n\nloader = DataLoader(MyDataset(X, y), batch_size=32,\n                     shuffle=True, num_workers=4, pin_memory=True)</code></pre><ul><li><code>num_workers>0</code> ускоряет загрузку, но на Windows нужен <code>if __name__ == '__main__':</code></li><li><code>pin_memory=True</code> ускоряет перенос на GPU</li><li><code>drop_last=True</code> полезен при BatchNorm с маленьким последним батчем</li></ul><p>Совет: выносите тяжёлую предобработку (аугментации) внутрь <code>__getitem__</code>, а не в <code>__init__</code>, чтобы не грузить всё в память сразу.</p>",
+      "links": [
+        {
+          "title": "PyTorch Datasets & DataLoaders tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/basics/data_tutorial.html"
+        },
+        {
+          "title": "torch.utils.data docs",
+          "url": "https://pytorch.org/docs/stable/data.html"
+        }
+      ]
+    },
+    {
+      "title": "Цикл обучения (training loop)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Классический цикл обучения в PyTorch собирается вручную — в этом гибкость фреймворка.</p><pre><code>for epoch in range(epochs):\n    model.train()\n    for xb, yb in train_loader:\n        xb, yb = xb.to(device), yb.to(device)\n        optimizer.zero_grad()\n        pred = model(xb)\n        loss = criterion(pred, yb)\n        loss.backward()\n        optimizer.step()\n\n    model.eval()\n    with torch.no_grad():\n        val_loss = sum(criterion(model(xb.to(device)), yb.to(device))\n                        for xb, yb in val_loader)</code></pre><p>Порядок действий важен: <code>zero_grad → forward → loss → backward → step</code>. Пропуск валидации на <code>model.eval()</code> или отсутствие <code>no_grad()</code> — частые причины OOM и утечек памяти в длинных обучениях.</p>",
+      "links": [
+        {
+          "title": "PyTorch Optimization loop tutorial",
+          "url": "https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html"
+        },
+        {
+          "title": "PyTorch training a classifier",
+          "url": "https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html"
+        }
+      ]
+    },
+    {
+      "title": "Функции потерь (Loss functions)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Выбор функции потерь напрямую определяет, чему учится сеть.</p><table><tr><th>Задача</th><th>Loss</th></tr><tr><td>Регрессия</td><td><code>nn.MSELoss</code>, <code>nn.L1Loss</code></td></tr><tr><td>Бинарная классификация</td><td><code>nn.BCEWithLogitsLoss</code></td></tr><tr><td>Мультиклассовая</td><td><code>nn.CrossEntropyLoss</code></td></tr><tr><td>Несбалансированные классы</td><td>Focal Loss (кастомная)</td></tr></table><pre><code>criterion = nn.CrossEntropyLoss()\nloss = criterion(logits, targets)  # targets - индексы классов, НЕ one-hot</code></pre><p>Частая ошибка: применять <code>Softmax</code> вручную перед <code>CrossEntropyLoss</code> — она уже включает <code>LogSoftmax</code> внутри, двойное применение портит градиенты и обучение &laquo;не сходится&raquo;.</p>",
+      "links": [
+        {
+          "title": "torch.nn Loss functions docs",
+          "url": "https://pytorch.org/docs/stable/nn.html#loss-functions"
+        },
+        {
+          "title": "nn.CrossEntropyLoss docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html"
+        },
+        {
+          "title": "Focal Loss paper (arXiv)",
+          "url": "https://arxiv.org/abs/1708.02002"
+        }
+      ]
+    },
+    {
+      "title": "Инициализация весов",
+      "level": "🔴 Senior",
+      "explanation": "<p>Плохая инициализация весов приводит к затуханию или взрыву градиентов ещё до первого шага обучения.</p><pre><code>def init_weights(m):\n    if isinstance(m, nn.Linear):\n        nn.init.kaiming_normal_(m.weight, nonlinearity='relu')\n        nn.init.zeros_(m.bias)\n\nmodel.apply(init_weights)</code></pre><ul><li>Xavier/Glorot — для Sigmoid/Tanh (сохраняет дисперсию активаций)</li><li>Kaiming/He — для ReLU-семейства</li><li>PyTorch уже применяет разумную инициализацию по умолчанию для встроенных слоёв — кастомная нужна редко, в основном при нестандартных архитектурах</li></ul><p>В продакшене инициализацию проверяют, когда loss не двигается с эпохи 0 — часто дело либо в learning rate, либо в &laquo;мёртвых&raquo; ReLU из-за неудачной инициализации.</p>",
+      "links": [
+        {
+          "title": "torch.nn.init docs",
+          "url": "https://pytorch.org/docs/stable/nn.init.html"
+        },
+        {
+          "title": "Kaiming initialization paper (arXiv)",
+          "url": "https://arxiv.org/abs/1502.01852"
+        },
+        {
+          "title": "Xavier/Glorot initialization paper",
+          "url": "https://proceedings.mlr.press/v9/glorot10a.html"
+        }
+      ]
+    },
+    {
+      "title": "Сохранение и загрузка моделей",
+      "level": "🟡 Middle",
+      "explanation": "<p>Рекомендуемый способ — сохранять <code>state_dict</code> (веса), а не весь объект модели, чтобы не зависеть от путей к классам.</p><pre><code># Сохранение\ntorch.save(model.state_dict(), 'model.pt')\n\n# Загрузка\nmodel = MyModel()\nmodel.load_state_dict(torch.load('model.pt', map_location=device))\nmodel.eval()</code></pre><p>Для чекпоинтов с продолжением обучения сохраняют словарь:</p><pre><code>torch.save({'epoch': epoch,\n            'model': model.state_dict(),\n            'optimizer': optimizer.state_dict(),\n            'loss': loss}, 'ckpt.pt')</code></pre><p>Совет: указывайте <code>map_location</code> при загрузке — иначе загрузка GPU-чекпоинта на машине без CUDA упадёт с ошибкой.</p>",
+      "links": [
+        {
+          "title": "PyTorch Saving and Loading Models",
+          "url": "https://pytorch.org/tutorials/beginner/saving_loading_models.html"
+        },
+        {
+          "title": "torch.save docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.save.html"
+        }
+      ]
+    },
+    {
+      "title": "Отладка нейросетей",
+      "level": "🔴 Senior",
+      "explanation": "<p>Отладка нейросетей отличается от обычного софта — код может не падать, но модель просто не учится.</p><ul><li>Overfit на маленьком батче (5-10 примеров) — если loss не идёт к 0, проблема в архитектуре/коде, а не в данных</li><li>Проверяйте градиенты: <code>for n, p in model.named_parameters(): print(n, p.grad.norm())</code></li><li>Логируйте распределение активаций и весов (TensorBoard, Weights & Biases)</li><li>Проверьте, что <code>loss.item()</code> не NaN/Inf на первых шагах</li></ul><pre><code>torch.autograd.set_detect_anomaly(True)  # ловит NaN в backward, медленно, только для дебага</code></pre><p>Правило Andrej Karpathy: &laquo;сначала переобучите один батч до нуля&raquo; — если не получается, дальнейшее обучение на полном датасете точно не заработает.</p>",
+      "links": [
+        {
+          "title": "A Recipe for Training Neural Networks (Karpathy)",
+          "url": "https://karpathy.github.io/2019/04/25/recipe/"
+        },
+        {
+          "title": "PyTorch autograd anomaly detection docs",
+          "url": "https://pytorch.org/docs/stable/autograd.html#torch.autograd.detect_anomaly"
+        },
+        {
+          "title": "Weights & Biases docs",
+          "url": "https://docs.wandb.ai/"
+        }
+      ]
+    },
+    {
+      "title": "GPU и device management",
+      "level": "🟡 Middle",
+      "explanation": "<p>Правильное управление устройствами критично для скорости и стабильности обучения.</p><pre><code>device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\nmodel.to(device)\n\nfor xb, yb in loader:\n    xb, yb = xb.to(device, non_blocking=True), yb.to(device, non_blocking=True)</code></pre><ul><li>Модель и данные должны быть на одном устройстве, иначе <code>RuntimeError: Expected all tensors to be on the same device</code></li><li><code>torch.cuda.amp.autocast()</code> + <code>GradScaler</code> — mixed precision, ускоряет обучение на GPU почти вдвое</li><li><code>nvidia-smi</code> — мониторинг загрузки GPU и памяти</li></ul><p>Частая ошибка: гонять валидацию с <code>batch_size</code> как на трейне без <code>no_grad()</code> — на инференсе можно смело увеличивать батч в 2-4 раза, так как градиенты не хранятся.</p>",
+      "links": [
+        {
+          "title": "PyTorch CUDA semantics",
+          "url": "https://pytorch.org/docs/stable/notes/cuda.html"
+        },
+        {
+          "title": "Automatic Mixed Precision (AMP) docs",
+          "url": "https://pytorch.org/docs/stable/amp.html"
+        },
+        {
+          "title": "PyTorch device documentation",
+          "url": "https://pytorch.org/docs/stable/tensor_attributes.html#torch.device"
+        }
+      ]
+    },
+    {
+      "title": "Регуляризация: Dropout и BatchNorm",
+      "level": "🔴 Senior",
+      "explanation": "<p>Dropout и BatchNorm — два инструмента борьбы с переобучением и нестабильностью обучения, но ведут себя по-разному в train/eval режимах.</p><pre><code>self.dropout = nn.Dropout(p=0.3)\nself.bn = nn.BatchNorm1d(64)\n\ndef forward(self, x):\n    x = self.bn(self.fc(x))\n    x = torch.relu(x)\n    x = self.dropout(x)\n    return x</code></pre><ul><li>Dropout зануляет случайные нейроны при train, при eval — работает как identity</li><li>BatchNorm использует статистики батча при train и накопленные running_mean/var при eval</li><li>Забытый <code>model.eval()</code> — BatchNorm использует статистику текущего маленького батча инференса, что даёт нестабильные и разные результаты на одном и том же входе</li></ul><p>Совет: не ставьте BatchNorm с очень маленьким batch_size (&lt;8) — статистики становятся шумными, лучше LayerNorm.</p>",
+      "links": [
+        {
+          "title": "nn.Dropout docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html"
+        },
+        {
+          "title": "nn.BatchNorm1d docs",
+          "url": "https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html"
+        },
+        {
+          "title": "Batch Normalization paper (arXiv)",
+          "url": "https://arxiv.org/abs/1502.03167"
+        },
+        {
+          "title": "Layer Normalization paper (arXiv)",
+          "url": "https://arxiv.org/abs/1607.06450"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Зачем между линейными слоями MLP нужна функция активации?",
+      "options": [
+        "Ускоряет матричное умножение",
+        "Без неё стек линейных слоёв эквивалентен одному линейному слою",
+        "Уменьшает число параметров",
+        "Заменяет backpropagation"
+      ],
+      "answer": 1,
+      "explain": "Композиция линейных функций — снова линейная функция, поэтому без нелинейности глубина сети бесполезна."
+    },
+    {
+      "q": "Что произойдёт, если забыть optimizer.zero_grad() перед backward()?",
+      "options": [
+        "Ничего, PyTorch сам обнулит градиенты",
+        "Градиенты накопятся с предыдущих шагов и обучение пойдёт неверно",
+        "Модель обучится быстрее",
+        "Возникнет ошибка компиляции графа"
+      ],
+      "answer": 1,
+      "explain": "Градиенты в PyTorch накапливаются (+=), без обнуления они суммируются между батчами."
+    },
+    {
+      "q": "Что делает torch.no_grad() при инференсе?",
+      "options": [
+        "Ускоряет forward pass в 10 раз всегда",
+        "Отключает построение графа автодифференцирования, экономя память",
+        "Замораживает веса модели навсегда",
+        "Переключает модель в train режим"
+      ],
+      "answer": 1,
+      "explain": "no_grad() отключает отслеживание операций для автограда, экономя память и немного ускоряя вычисления."
+    },
+    {
+      "q": "Почему нельзя применять Softmax вручную перед nn.CrossEntropyLoss?",
+      "options": [
+        "Softmax работает только на GPU",
+        "CrossEntropyLoss уже включает LogSoftmax внутри, двойное применение портит градиенты",
+        "Softmax несовместим с батчами",
+        "Это вызовет ошибку типов данных"
+      ],
+      "answer": 1,
+      "explain": "nn.CrossEntropyLoss объединяет LogSoftmax и NLLLoss, повторный softmax искажает вычисление потерь."
+    },
+    {
+      "q": "Какая инициализация весов рекомендуется для слоёв с ReLU-активацией?",
+      "options": [
+        "Xavier/Glorot",
+        "Kaiming/He",
+        "Нулевая инициализация",
+        "Случайная из равномерного [0,1]"
+      ],
+      "answer": 1,
+      "explain": "Kaiming (He) инициализация учитывает особенность ReLU и сохраняет дисперсию активаций в глубоких сетях."
+    },
+    {
+      "q": "Почему важно указывать map_location при torch.load()?",
+      "options": [
+        "Это ускоряет загрузку модели",
+        "Без него загрузка GPU-чекпоинта на машине без CUDA завершится ошибкой",
+        "Это уменьшает размер файла модели",
+        "map_location влияет на точность модели"
+      ],
+      "answer": 1,
+      "explain": "map_location позволяет корректно перенести тензоры на доступное устройство при загрузке."
+    },
+    {
+      "q": "Какой первый шаг рекомендуется при отладке нейросети, которая 'не учится'?",
+      "options": [
+        "Сразу увеличить датасет",
+        "Переобучить модель на маленьком батче (5-10 примеров) до loss≈0",
+        "Добавить больше слоёв",
+        "Уменьшить learning rate в 100 раз"
+      ],
+      "answer": 1,
+      "explain": "Если модель не может переобучить крошечный батч, проблема в архитектуре или коде, а не в объёме данных."
+    },
+    {
+      "q": "Что произойдёт, если забыть вызвать model.eval() перед инференсом с BatchNorm и Dropout?",
+      "options": [
+        "Модель откажется работать",
+        "Dropout останется активным, BatchNorm будет использовать статистику текущего батча — результаты станут нестабильными",
+        "Ничего, поведение идентично train",
+        "Скорость инференса упадёт вдвое"
+      ],
+      "answer": 1,
+      "explain": "В train-режиме Dropout зануляет нейроны, а BatchNorm использует батч-статистику вместо накопленной — это делает предсказания непостоянными."
+    },
+    {
+      "q": "Зачем использовать pin_memory=True в DataLoader?",
+      "options": [
+        "Уменьшает объём датасета",
+        "Ускоряет перенос данных с CPU на GPU",
+        "Автоматически нормализует данные",
+        "Отключает многопоточность"
+      ],
+      "answer": 1,
+      "explain": "pin_memory фиксирует память в page-locked области, что ускоряет асинхронный перенос данных на GPU."
+    },
+    {
+      "q": "Почему BatchNorm плохо работает с очень маленьким batch_size (например, 2-4)?",
+      "options": [
+        "Он вообще не поддерживает такие размеры и вызывает ошибку",
+        "Статистики (mean/var) батча становятся шумными и нестабильными",
+        "Увеличивается число параметров модели",
+        "BatchNorm работает только с batch_size=1"
+      ],
+      "answer": 1,
+      "explain": "При маленьком батче оценка среднего и дисперсии крайне зашумлена; в таких случаях лучше использовать LayerNorm."
+    }
+  ]
+}

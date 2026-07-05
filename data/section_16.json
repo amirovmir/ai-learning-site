@@ -1,0 +1,411 @@
+{
+  "phase": "Phase 5 — MLOps & Production",
+  "section": "🚀 MLOps: деплой и мониторинг",
+  "topics": [
+    {
+      "title": "Жизненный цикл ML-модели",
+      "level": "🟢 Junior",
+      "explanation": "<p>ML-модель проходит путь: сбор данных → эксперименты → обучение → валидация → деплой → мониторинг → переобучение. Новички часто думают, что работа заканчивается на <code>model.fit()</code>, но на практике деплой и поддержка занимают 80% времени команды.</p><ul><li><b>Data</b>: сбор, разметка, версионирование</li><li><b>Train</b>: эксперименты, подбор гиперпараметров</li><li><b>Validate</b>: офлайн-метрики, тест на holdout</li><li><b>Deploy</b>: упаковка, serving</li><li><b>Monitor</b>: дрифт, деградация, алерты</li><li><b>Retrain</b>: цикл повторяется</li></ul><p>Типичная ошибка джуна — считать пайплайн линейным. На деле это цикл с обратной связью: мониторинг в проде порождает новые данные для переобучения.</p><pre><code># Псевдо-пайплайн\ndata = collect_and_label()\nmodel = train(data)\nif validate(model) &gt; threshold:\n    deploy(model)\nmonitor(model)  # триггерит retrain при дрифте</code></pre><p>Совет: с первого дня проектируйте систему так, будто модель будет переобучаться раз в неделю — это избавит от боли позже.</p>",
+      "links": [
+        {
+          "title": "Google ML Ops guide",
+          "url": "https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning"
+        },
+        {
+          "title": "MLOps Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/MLOps"
+        },
+        {
+          "title": "Made With ML",
+          "url": "https://madewithml.com/"
+        }
+      ]
+    },
+    {
+      "title": "Версионирование данных: DVC",
+      "level": "🟢 Junior",
+      "explanation": "<p>Git плохо работает с большими файлами данных. <b>DVC (Data Version Control)</b> хранит метаданные в git, а сами данные — в удалённом хранилище (S3, MinIO, GDrive).</p><pre><code>dvc init\ndvc add data/train.csv\ngit add data/train.csv.dvc .gitignore\ngit commit -m \"add dataset v1\"\ndvc remote add -d storage s3://bucket/dvcstore\ndvc push</code></pre><p>Каждая версия датасета получает хэш, воспроизводимость экспериментов гарантирована — вы всегда можете <code>dvc checkout</code> к нужной версии данных вместе с git-коммитом кода.</p><table><tr><th>Инструмент</th><th>Что версионирует</th></tr><tr><td>Git</td><td>код</td></tr><tr><td>DVC</td><td>данные, модели, пайплайны</td></tr><tr><td>MLflow</td><td>эксперименты, метрики</td></tr></table><p>Частая ошибка — коммитить датасеты напрямую в git: репозиторий раздувается до гигабайт, клонирование становится мучением. Всегда добавляйте большие файлы через DVC/Git LFS.</p>",
+      "links": [
+        {
+          "title": "DVC Documentation",
+          "url": "https://dvc.org/doc"
+        },
+        {
+          "title": "DVC Get Started",
+          "url": "https://dvc.org/doc/start"
+        },
+        {
+          "title": "Git LFS",
+          "url": "https://git-lfs.com/"
+        }
+      ]
+    },
+    {
+      "title": "Эксперимент-трекинг: MLflow",
+      "level": "🟢 Junior",
+      "explanation": "<p>Без трекинга через месяц вы забудете, какой seed, какие гиперпараметры и какая версия данных дали лучший результат. <b>MLflow Tracking</b> логирует параметры, метрики, артефакты и модели.</p><pre><code>import mlflow\n\nwith mlflow.start_run():\n    mlflow.log_param(\"lr\", 0.001)\n    mlflow.log_param(\"batch_size\", 32)\n    for epoch in range(epochs):\n        loss = train_epoch()\n        mlflow.log_metric(\"loss\", loss, step=epoch)\n    mlflow.sklearn.log_model(model, \"model\")</code></pre><p>Затем в UI (<code>mlflow ui</code>) можно сравнивать запуски визуально, сортировать по метрикам, находить лучший чекпоинт.</p><ul><li><b>MLflow Model Registry</b> — управление стадиями модели (Staging → Production → Archived)</li><li>Альтернативы: Weights & Biases, Neptune.ai, ClearML</li></ul><p>Продакшен-совет: логируйте не только метрики, но и хэш git-коммита и версию данных — это единственный способ честно воспроизвести результат через полгода.</p>",
+      "links": [
+        {
+          "title": "MLflow Documentation",
+          "url": "https://mlflow.org/docs/latest/index.html"
+        },
+        {
+          "title": "MLflow Tracking",
+          "url": "https://mlflow.org/docs/latest/tracking.html"
+        },
+        {
+          "title": "Weights & Biases Docs",
+          "url": "https://docs.wandb.ai/"
+        }
+      ]
+    },
+    {
+      "title": "Docker для ML-приложений",
+      "level": "🟢 Junior",
+      "explanation": "<p>Docker решает проблему «у меня локально работало» — модель, зависимости и системные библиотеки (CUDA, cuDNN) упаковываются в один образ.</p><pre><code>FROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY model.pkl app.py .\nEXPOSE 8000\nCMD [\"uvicorn\", \"app:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]</code></pre><p>Для GPU-инференса используйте образы <code>nvidia/cuda</code> и флаг <code>--gpus all</code> при запуске контейнера.</p><ul><li>Фиксируйте версии в <code>requirements.txt</code> (не <code>torch</code>, а <code>torch==2.3.1</code>) — иначе сборка через полгода развалится</li><li>Используйте multi-stage build, чтобы не тащить в финальный образ компиляторы и кэш pip</li><li>Проверяйте размер образа: модель весом 500 МБ + torch = легко больше 5 ГБ</li></ul><p>Типичная ошибка — не закреплять версию CUDA-драйвера хоста и образа, что приводит к <code>CUDA error: no kernel image is available</code>.</p>",
+      "links": [
+        {
+          "title": "Docker Documentation",
+          "url": "https://docs.docker.com/"
+        },
+        {
+          "title": "NVIDIA Container Toolkit",
+          "url": "https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html"
+        },
+        {
+          "title": "Docker for Python apps",
+          "url": "https://docs.docker.com/language/python/"
+        }
+      ]
+    },
+    {
+      "title": "Model Serving: FastAPI",
+      "level": "🟡 Middle",
+      "explanation": "<p>Самый простой и гибкий способ отдать модель — обернуть её в REST API на FastAPI. Подходит для небольшой и средней нагрузки, для кастомной бизнес-логики препроцессинга.</p><pre><code>from fastapi import FastAPI\nimport joblib\nfrom pydantic import BaseModel\n\napp = FastAPI()\nmodel = joblib.load(\"model.pkl\")\n\nclass Item(BaseModel):\n    features: list[float]\n\n@app.post(\"/predict\")\ndef predict(item: Item):\n    pred = model.predict([item.features])\n    return {\"prediction\": pred.tolist()}</code></pre><p>Для продакшена запускайте через <code>uvicorn</code> с несколькими воркерами (<code>gunicorn -k uvicorn.workers.UvicornWorker -w 4</code>), добавляйте health-check эндпоинт <code>/health</code> и timeouts.</p><ul><li>Валидируйте вход через Pydantic — избежите падений на «грязных» данных</li><li>Держите модель в памяти процесса, а не загружайте на каждый запрос</li><li>Логируйте latency каждого запроса — пригодится для мониторинга</li></ul><p>Ошибка новичков: держать тяжёлую модель на CPU без батчинга запросов — throughput падает в разы.</p>",
+      "links": [
+        {
+          "title": "FastAPI Documentation",
+          "url": "https://fastapi.tiangolo.com/"
+        },
+        {
+          "title": "Uvicorn",
+          "url": "https://www.uvicorn.org/"
+        },
+        {
+          "title": "Pydantic Docs",
+          "url": "https://docs.pydantic.dev/"
+        }
+      ]
+    },
+    {
+      "title": "Model Serving: TorchServe и Triton",
+      "level": "🟡 Middle",
+      "explanation": "<p>Для высоконагруженных сервисов FastAPI-обёртка не всегда эффективна — нет динамического батчинга, сложнее версионировать модели. <b>TorchServe</b> и <b>NVIDIA Triton Inference Server</b> решают это на уровне инфраструктуры.</p><pre><code># TorchServe: упаковка модели\ntorch-model-archiver --model-name resnet \\\n  --version 1.0 --serialized-file model.pt \\\n  --handler image_classifier \\\n  --export-path model_store\n\ntorchserve --start --model-store model_store --models resnet=resnet.mar</code></pre><p>Triton поддерживает несколько бэкендов (PyTorch, TensorRT, ONNX) одновременно, динамический батчинг и multi-model serving на одном GPU с эффективным разделением памяти.</p><table><tr><th>Инструмент</th><th>Плюс</th></tr><tr><td>FastAPI</td><td>простота, гибкая логика</td></tr><tr><td>TorchServe</td><td>встроенный батчинг, метрики</td></tr><tr><td>Triton</td><td>максимальный throughput, мультибэкенд</td></tr></table><p>Совет: не берите Triton для MVP — оверинжиниринг. Начинайте с FastAPI, мигрируйте когда упрётесь в throughput.</p>",
+      "links": [
+        {
+          "title": "TorchServe Documentation",
+          "url": "https://pytorch.org/serve/"
+        },
+        {
+          "title": "NVIDIA Triton Inference Server",
+          "url": "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html"
+        },
+        {
+          "title": "ONNX Runtime",
+          "url": "https://onnxruntime.ai/docs/"
+        }
+      ]
+    },
+    {
+      "title": "Serving LLM: vLLM",
+      "level": "🟡 Middle",
+      "explanation": "<p>Обычная генерация токенов LLM через HuggingFace <code>generate()</code> крайне неэффективна под нагрузкой. <b>vLLM</b> использует PagedAttention для эффективного управления KV-кэшем и continuous batching.</p><pre><code>pip install vllm\n\nfrom vllm import LLM, SamplingParams\n\nllm = LLM(model=\"meta-llama/Llama-3-8B\")\nparams = SamplingParams(temperature=0.7, max_tokens=200)\noutputs = llm.generate([\"Explain MLOps in short\"], params)\nprint(outputs[0].outputs[0].text)</code></pre><p>Для продакшена запускается как OpenAI-совместимый сервер:</p><pre><code>python -m vllm.entrypoints.openai.api_server \\\n  --model meta-llama/Llama-3-8B --port 8000</code></pre><ul><li>Continuous batching даёт в разы больше throughput vs наивный batch inference</li><li>Поддерживает квантизацию (AWQ, GPTQ) для экономии VRAM</li><li>Совместимость с OpenAI API упрощает миграцию с внешних провайдеров</li></ul><p>Ошибка: недооценивать требования к VRAM — 8B модель в fp16 требует ~16 ГБ только под веса, плюс KV-кэш растёт с длиной контекста и числом параллельных запросов.</p>",
+      "links": [
+        {
+          "title": "vLLM Documentation",
+          "url": "https://docs.vllm.ai/"
+        },
+        {
+          "title": "vLLM GitHub",
+          "url": "https://github.com/vllm-project/vllm"
+        },
+        {
+          "title": "PagedAttention paper (arXiv)",
+          "url": "https://arxiv.org/abs/2309.06180"
+        }
+      ]
+    },
+    {
+      "title": "Батч vs онлайн инференс",
+      "level": "🟢 Junior",
+      "explanation": "<p>Выбор архитектуры инференса зависит от требований к latency и объёму данных.</p><table><tr><th>Тип</th><th>Когда использовать</th><th>Пример</th></tr><tr><td>Batch</td><td>Не нужен realtime, большие объёмы</td><td>ночной пересчёт рекомендаций</td></tr><tr><td>Online (realtime)</td><td>Нужен ответ за миллисекунды</td><td>детект мошенничества при оплате</td></tr><tr><td>Streaming</td><td>Непрерывный поток событий</td><td>обработка логов через Kafka</td></tr></table><pre><code># Batch inference через Spark/Pandas\nimport pandas as pd\ndf = pd.read_parquet(\"users.parquet\")\ndf[\"score\"] = model.predict(df[features])\ndf.to_parquet(\"scored_users.parquet\")</code></pre><p>Типичная ошибка — проектировать сервис под realtime, когда на самом деле бизнесу достаточно батча раз в час. Батч дешевле, проще масштабировать и отлаживать, не требует SLA по latency.</p><p>Совет: спрашивайте у продукта реальные требования к задержке ответа, прежде чем строить сложный realtime-сервис.</p>",
+      "links": [
+        {
+          "title": "Apache Spark Documentation",
+          "url": "https://spark.apache.org/docs/latest/"
+        },
+        {
+          "title": "Apache Kafka Documentation",
+          "url": "https://kafka.apache.org/documentation/"
+        },
+        {
+          "title": "pandas Documentation",
+          "url": "https://pandas.pydata.org/docs/"
+        }
+      ]
+    },
+    {
+      "title": "Оптимизация инференса: ONNX",
+      "level": "🟡 Middle",
+      "explanation": "<p><b>ONNX (Open Neural Network Exchange)</b> — универсальный формат моделей, позволяющий переносить модель между фреймворками и запускать через оптимизированный рантайм <code>onnxruntime</code>, который быстрее нативного PyTorch на CPU.</p><pre><code>import torch\ntorch.onnx.export(\n    model, dummy_input, \"model.onnx\",\n    input_names=[\"input\"], output_names=[\"output\"],\n    dynamic_axes={\"input\": {0: \"batch\"}}\n)\n\nimport onnxruntime as ort\nsession = ort.InferenceSession(\"model.onnx\")\noutputs = session.run(None, {\"input\": x.numpy()})</code></pre><ul><li>Graph-оптимизации (fusion операций) дают ускорение 1.5-3x без потери точности</li><li>Единый формат для деплоя из PyTorch/TF/sklearn в единый рантайм</li><li>Поддержка execution providers: CPU, CUDA, TensorRT, OpenVINO</li></ul><p>Частая проблема — динамические формы входа (variable batch/sequence length) требуют явного указания <code>dynamic_axes</code>, иначе экспорт «зашьёт» конкретный размер и модель сломается на других входах.</p>",
+      "links": [
+        {
+          "title": "ONNX Documentation",
+          "url": "https://onnx.ai/onnx/index.html"
+        },
+        {
+          "title": "PyTorch ONNX Export",
+          "url": "https://pytorch.org/docs/stable/onnx.html"
+        },
+        {
+          "title": "ONNX Runtime",
+          "url": "https://onnxruntime.ai/docs/"
+        }
+      ]
+    },
+    {
+      "title": "Квантизация моделей",
+      "level": "🔴 Senior",
+      "explanation": "<p>Квантизация уменьшает разрядность весов (fp32 → int8/int4), сокращая память и ускоряя инференс, ценой небольшой потери точности.</p><pre><code># Динамическая квантизация PyTorch\nimport torch\nquantized_model = torch.quantization.quantize_dynamic(\n    model, {torch.nn.Linear}, dtype=torch.qint8\n)\n\n# Для LLM: bitsandbytes 4-bit\nfrom transformers import AutoModelForCausalLM, BitsAndBytesConfig\nbnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)\nmodel = AutoModelForCausalLM.from_pretrained(\"llama-3-8b\", quantization_config=bnb_config)</code></pre><table><tr><th>Метод</th><th>Особенность</th></tr><tr><td>Dynamic quant</td><td>просто, для CPU inference</td></tr><tr><td>Static quant (PTQ)</td><td>нужен калибровочный датасет</td></tr><tr><td>QAT</td><td>обучение с учётом квантизации, лучшая точность</td></tr><tr><td>GPTQ/AWQ</td><td>SOTA для LLM, минимальная просадка</td></tr></table><p>Senior-совет: всегда мерьте деградацию качества на реальном валидационном наборе после квантизации — иногда int4 «на глаз» работает, но качество на edge-case запросах падает заметно.</p>",
+      "links": [
+        {
+          "title": "PyTorch Quantization",
+          "url": "https://pytorch.org/docs/stable/quantization.html"
+        },
+        {
+          "title": "bitsandbytes (Hugging Face)",
+          "url": "https://huggingface.co/docs/bitsandbytes/index"
+        },
+        {
+          "title": "GPTQ paper (arXiv)",
+          "url": "https://arxiv.org/abs/2210.17323"
+        },
+        {
+          "title": "AWQ paper (arXiv)",
+          "url": "https://arxiv.org/abs/2306.00978"
+        }
+      ]
+    },
+    {
+      "title": "Мониторинг моделей в проде",
+      "level": "🟡 Middle",
+      "explanation": "<p>В отличие от обычного ПО, ML-модель может «молча» деградировать без единой ошибки в логах — код работает, но предсказания становятся хуже. Нужен отдельный слой мониторинга.</p><ul><li><b>Инфраструктурные метрики</b>: latency, throughput, error rate, использование GPU/CPU</li><li><b>Метрики качества модели</b>: точность на размеченной выборке (если доступна), распределение предсказаний</li><li><b>Метрики входных данных</b>: дрифт признаков, пропуски, аномалии</li></ul><pre><code># Prometheus + FastAPI\nfrom prometheus_client import Histogram, Counter\n\nREQUEST_LATENCY = Histogram(\"predict_latency_seconds\", \"latency\")\nPREDICTIONS = Counter(\"predictions_total\", \"count\", [\"class\"])\n\n@app.post(\"/predict\")\n@REQUEST_LATENCY.time()\ndef predict(item: Item):\n    pred = model.predict([item.features])\n    PREDICTIONS.labels(class=str(pred[0])).inc()\n    return {\"prediction\": pred.tolist()}</code></pre><p>Стек Prometheus + Grafana + алерты в Slack/PagerDuty — стандарт индустрии. Совет: настраивайте алерт не только на ошибки сервиса, но и на резкое смещение распределения выходов модели (например, доля класса \"fraud\" внезапно выросла в 5 раз).</p>",
+      "links": [
+        {
+          "title": "Prometheus Documentation",
+          "url": "https://prometheus.io/docs/introduction/overview/"
+        },
+        {
+          "title": "Grafana Documentation",
+          "url": "https://grafana.com/docs/grafana/latest/"
+        },
+        {
+          "title": "Evidently AI Docs",
+          "url": "https://docs.evidentlyai.com/"
+        }
+      ]
+    },
+    {
+      "title": "Data drift и concept drift",
+      "level": "🔴 Senior",
+      "explanation": "<p><b>Data drift</b> — меняется распределение входных признаков (например, средний чек вырос из-за инфляции). <b>Concept drift</b> — меняется сама зависимость между признаками и таргетом (то, что раньше было мошенничеством, теперь легальная схема).</p><pre><code>from scipy.stats import ks_2samp\n\n# Тест Колмогорова-Смирнова между train и текущим распределением\nstat, p_value = ks_2samp(train_feature, prod_feature)\nif p_value &lt; 0.05:\n    alert(\"Data drift detected!\")</code></pre><ul><li><b>PSI (Population Stability Index)</b> — популярная метрика для табличных данных, порог 0.2 обычно считается тревожным</li><li>Библиотека <code>evidently</code> строит готовые отчёты по дрифту признаков и таргета</li><li>Concept drift сложнее обнаружить без ground truth — часто нужен delayed feedback loop (реальные исходы приходят через недели)</li></ul><pre><code>from evidently.report import Report\nfrom evidently.metric_preset import DataDriftPreset\n\nreport = Report(metrics=[DataDriftPreset()])\nreport.run(reference_data=train_df, current_data=prod_df)\nreport.save_html(\"drift_report.html\")</code></pre><p>Senior-совет: заранее продумайте, как в проде собирать ground truth (пусть с задержкой) — без него дрифт-мониторинг превращается в гадание.</p>",
+      "links": [
+        {
+          "title": "Evidently AI Documentation",
+          "url": "https://docs.evidentlyai.com/"
+        },
+        {
+          "title": "scipy.stats.ks_2samp",
+          "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ks_2samp.html"
+        },
+        {
+          "title": "Concept drift (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Concept_drift"
+        }
+      ]
+    },
+    {
+      "title": "A/B тестирование моделей",
+      "level": "🔴 Senior",
+      "explanation": "<p>Офлайн-метрики (accuracy, F1) не гарантируют бизнес-эффект. A/B-тест сравнивает старую и новую модель на реальном трафике по бизнес-метрике (конверсия, revenue, CTR).</p><pre><code># Простое разделение трафика по hash(user_id)\ndef assign_bucket(user_id: str, ratio: float = 0.1) -&gt; str:\n    h = int(hashlib.md5(user_id.encode()).hexdigest(), 16)\n    return \"treatment\" if (h % 100) &lt; ratio * 100 else \"control\"</code></pre><ul><li><b>Shadow deployment</b> — новая модель считает предсказания параллельно, но не влияет на пользователя; сравниваем офлайн</li><li><b>Canary release</b> — новую модель выкатывают на 1-5% трафика, постепенно увеличивая долю при отсутствии проблем</li><li>Обязательно считайте статистическую значимость (t-test, доверительные интервалы), а не просто сравнивайте средние</li></ul><table><tr><th>Стратегия</th><th>Риск</th></tr><tr><td>Shadow</td><td>минимальный, нет влияния на юзера</td></tr><tr><td>Canary</td><td>низкий, контролируемый rollout</td></tr><tr><td>Full A/B</td><td>средний, нужен статистический расчёт мощности</td></tr></table><p>Частая ошибка — остановить тест раньше срока при первом хорошем результате (peeking problem), что искажает статистику.</p>",
+      "links": [
+        {
+          "title": "A/B testing (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/A/B_testing"
+        },
+        {
+          "title": "Google Cloud: Application Deployment and Testing Strategies",
+          "url": "https://cloud.google.com/architecture/application-deployment-and-testing-strategies"
+        },
+        {
+          "title": "Trustworthy Online Controlled Experiments",
+          "url": "https://www.exp-platform.com/"
+        }
+      ]
+    },
+    {
+      "title": "CI/CD для ML (MLOps pipelines)",
+      "level": "🔴 Senior",
+      "explanation": "<p>CI/CD для ML шире обычного software CI/CD — нужно тестировать не только код, но и данные, и качество модели.</p><ul><li><b>CI</b>: линтеры, юнит-тесты кода, тесты на схему данных (great_expectations), быстрый smoke-тест обучения на маленькой выборке</li><li><b>CT (Continuous Training)</b>: автоматический ретрейн по расписанию или по триггеру дрифта</li><li><b>CD</b>: автоматический деплой модели при прохождении порога качества на holdout</li></ul><pre><code># GitHub Actions: пример шага валидации модели\n- name: Validate model\n  run: |\n    python train.py --output model.pkl\n    python validate.py --model model.pkl --min-f1 0.85\n\n- name: Deploy if passed\n  if: success()\n  run: |\n    mlflow models serve -m model.pkl -p 8000 &amp;\n    curl -X POST http://localhost:8000/invocations -d @sample.json</code></pre><p>Инструменты оркестрации пайплайнов: Airflow, Kubeflow Pipelines, Prefect, Dagster — они умеют строить DAG из шагов (extract → train → validate → deploy) с ретраями и мониторингом.</p><p>Senior-совет: закладывайте автоматический rollback — если после деплоя ключевая бизнес-метрика падает, система должна откатиться на предыдущую модель без участия человека.</p>",
+      "links": [
+        {
+          "title": "Kubeflow Pipelines",
+          "url": "https://www.kubeflow.org/docs/components/pipelines/"
+        },
+        {
+          "title": "Apache Airflow Documentation",
+          "url": "https://airflow.apache.org/docs/"
+        },
+        {
+          "title": "Great Expectations Docs",
+          "url": "https://docs.greatexpectations.io/docs/"
+        },
+        {
+          "title": "GitHub Actions Documentation",
+          "url": "https://docs.github.com/en/actions"
+        }
+      ]
+    },
+    {
+      "title": "Feature Store (кратко)",
+      "level": "🔴 Senior",
+      "explanation": "<p><b>Feature Store</b> решает проблему train/serve skew — когда признаки для обучения считаются одним кодом (Python/Spark оффлайн), а признаки в проде — другим (Java/Go онлайн), и они расходятся.</p><ul><li><b>Offline store</b> — исторические признаки для обучения (обычно data warehouse: BigQuery, Snowflake)</li><li><b>Online store</b> — низколатентное хранилище (Redis, DynamoDB) для realtime-инференса</li><li>Единое определение фичи гарантирует консистентность между train и serve</li></ul><pre><code># Пример с Feast\nfrom feast import FeatureStore\n\nstore = FeatureStore(repo_path=\".\")\n\n# Обучение: исторические фичи\ntraining_df = store.get_historical_features(\n    entity_df=entity_df, features=[\"user_stats:avg_spend\"]\n).to_df()\n\n# Прод: realtime фичи\nfeatures = store.get_online_features(\n    features=[\"user_stats:avg_spend\"],\n    entity_rows=[{\"user_id\": 42}]\n).to_dict()</code></pre><p>Известные решения: Feast (open-source), Tecton, AWS SageMaker Feature Store. Внедрять feature store имеет смысл, когда команда растёт и несколько моделей начинают переиспользовать одни и те же признаки — для одного пет-проекта это оверинжиниринг.</p>",
+      "links": [
+        {
+          "title": "Feast Documentation",
+          "url": "https://docs.feast.dev/"
+        },
+        {
+          "title": "Tecton",
+          "url": "https://www.tecton.ai/"
+        },
+        {
+          "title": "AWS SageMaker Feature Store",
+          "url": "https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store.html"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что из перечисленного НЕ является частью жизненного цикла ML-модели?",
+      "options": [
+        "Мониторинг в проде",
+        "Версионирование данных",
+        "Написание CSS-стилей для лендинга",
+        "Переобучение при дрифте"
+      ],
+      "answer": 2,
+      "explain": "CSS-вёрстка лендинга не относится к ML-циклу — цикл включает данные, обучение, деплой, мониторинг, ретрейн."
+    },
+    {
+      "q": "Для чего используется DVC?",
+      "options": [
+        "Для форматирования Python-кода",
+        "Для версионирования больших датасетов и моделей рядом с git",
+        "Для деплоя контейнеров в Kubernetes",
+        "Для визуализации метрик обучения"
+      ],
+      "answer": 1,
+      "explain": "DVC хранит метаданные больших файлов в git, а сами данные — в удалённом сторадже (S3, MinIO и т.д.)."
+    },
+    {
+      "q": "Какой инструмент лучше всего подходит для трекинга экспериментов (параметры, метрики, артефакты)?",
+      "options": [
+        "Docker Compose",
+        "MLflow",
+        "Nginx",
+        "ONNX Runtime"
+      ],
+      "answer": 1,
+      "explain": "MLflow Tracking специально создан для логирования параметров, метрик и артефактов экспериментов."
+    },
+    {
+      "q": "Почему vLLM превосходит наивный HuggingFace generate() при обслуживании LLM под нагрузкой?",
+      "options": [
+        "Он использует другой язык программирования",
+        "PagedAttention и continuous batching эффективно управляют KV-кэшем и запросами",
+        "Он не поддерживает GPU",
+        "Он снижает точность модели для скорости"
+      ],
+      "answer": 1,
+      "explain": "vLLM применяет PagedAttention для эффективного KV-кэша и continuous batching, что резко увеличивает throughput."
+    },
+    {
+      "q": "Когда предпочтителен батч-инференс вместо онлайн?",
+      "options": [
+        "Когда нужен ответ за миллисекунды",
+        "Когда обрабатывается детект мошенничества в момент оплаты",
+        "Когда нет требования к realtime и объёмы данных большие",
+        "Никогда, онлайн всегда лучше"
+      ],
+      "answer": 2,
+      "explain": "Батч-инференс дешевле и проще, когда бизнесу не требуется мгновенный ответ (например, ночной пересчёт рекомендаций)."
+    },
+    {
+      "q": "Что даёт экспорт модели в формат ONNX?",
+      "options": [
+        "Автоматическое увеличение точности модели",
+        "Кроссплатформенный формат и ускорение инференса через onnxruntime",
+        "Замену необходимости в GPU полностью",
+        "Автоматическую разметку данных"
+      ],
+      "answer": 1,
+      "explain": "ONNX — универсальный формат для переноса между фреймворками, а onnxruntime даёт оптимизированный и часто более быстрый инференс."
+    },
+    {
+      "q": "Что такое data drift?",
+      "options": [
+        "Изменение зависимости между признаками и таргетом",
+        "Изменение распределения входных признаков модели со временем",
+        "Утечка данных из train в test",
+        "Ошибка в коде препроцессинга"
+      ],
+      "answer": 1,
+      "explain": "Data drift — это смещение распределения входных данных; concept drift — изменение самой зависимости признак→таргет."
+    },
+    {
+      "q": "Какая стратегия деплоя новой модели считается наименее рискованной, так как не влияет на реальных пользователей?",
+      "options": [
+        "Canary release",
+        "Полный A/B тест",
+        "Shadow deployment",
+        "Мгновенная полная замена (big bang)"
+      ],
+      "answer": 2,
+      "explain": "При shadow deployment новая модель считает предсказания параллельно со старой, но не влияет на ответ пользователю."
+    },
+    {
+      "q": "Зачем нужен Feature Store в MLOps-инфраструктуре?",
+      "options": [
+        "Чтобы хранить исходный код моделей",
+        "Чтобы избежать train/serve skew, обеспечивая единое определение признаков для обучения и продакшена",
+        "Чтобы заменить систему мониторинга",
+        "Чтобы ускорить компиляцию Docker-образов"
+      ],
+      "answer": 1,
+      "explain": "Feature Store гарантирует, что признаки при обучении (offline) и в проде (online) вычисляются одинаково, устраняя train/serve skew."
+    },
+    {
+      "q": "Что из перечисленного — типичная ошибка при CI/CD для ML?",
+      "options": [
+        "Автоматический rollback при падении бизнес-метрики",
+        "Тестирование схемы данных перед обучением",
+        "Остановка A/B теста раньше срока при первом хорошем результате (peeking)",
+        "Логирование версии данных и git-коммита вместе с метриками"
+      ],
+      "answer": 2,
+      "explain": "Peeking (ранняя остановка теста при удачном промежуточном результате) искажает статистическую значимость A/B теста."
+    }
+  ]
+}

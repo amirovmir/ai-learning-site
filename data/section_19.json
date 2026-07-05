@@ -1,0 +1,163 @@
+{
+  "phase": "Phase 5 — MLOps & Production",
+  "section": "⚔️ Сравнение моделей",
+  "topics": [
+    {
+      "title": "Классические алгоритмы: линейные модели vs деревья vs kNN vs SVM",
+      "level": "🟢 Junior",
+      "explanation": "<p>Прежде чем тащить нейросеть, стоит понимать, когда классика выигрывает. Выбор зависит от размера данных, интерпретируемости и характера границ решений.</p><table><tr><th>Алгоритм</th><th>Точность</th><th>Скорость</th><th>Интерпретируемость</th><th>Данные</th></tr><tr><td>Линейная/логистическая регрессия</td><td>средняя</td><td>очень высокая</td><td>высокая</td><td>линейно разделимые</td></tr><tr><td>Деревья решений</td><td>средняя</td><td>высокая</td><td>высокая</td><td>табличные, нелинейные</td></tr><tr><td>kNN</td><td>средняя-высокая</td><td>низкая (inference)</td><td>низкая</td><td>малые/средние выборки</td></tr><tr><td>SVM</td><td>высокая</td><td>средняя</td><td>низкая</td><td>малые, high-dim</td></tr></table><p>Правило большого пальца: начинайте с <code>LogisticRegression</code> как baseline, затем сравнивайте с деревьями/ансамблями.</p><pre><code>from sklearn.linear_model import LogisticRegression\nfrom sklearn.tree import DecisionTreeClassifier\nbaseline = LogisticRegression().fit(X_train, y_train)</code></pre><ul><li>Линейные модели — быстрый baseline и легко объяснить бизнесу</li><li>Деревья — нелинейные зависимости без масштабирования признаков</li><li>kNN/SVM — хороши на малых датасетах, плохо масштабируются</li></ul>",
+      "links": [
+        {"title": "scikit-learn: Choosing the right estimator", "url": "https://scikit-learn.org/stable/machine_learning_map.html"},
+        {"title": "An Introduction to Statistical Learning (книга)", "url": "https://www.statlearning.com/"},
+        {"title": "scikit-learn User Guide", "url": "https://scikit-learn.org/stable/user_guide.html"}
+      ]
+    },
+    {
+      "title": "Бустинг: XGBoost vs LightGBM vs CatBoost",
+      "level": "🟡 Middle",
+      "explanation": "<p>Три главных gradient boosting фреймворка для табличных данных. Каждый оптимизирован под свои сценарии.</p><table><tr><th></th><th>XGBoost</th><th>LightGBM</th><th>CatBoost</th></tr><tr><td>Скорость обучения</td><td>средняя</td><td>очень высокая</td><td>средняя</td></tr><tr><td>Категориальные признаки</td><td>ручной OHE</td><td>частично</td><td>нативно, лучше всех</td><td></td></tr><tr><td>Память</td><td>средняя</td><td>низкая (leaf-wise)</td><td>высокая</td></tr><tr><td>Переобучение на малых данных</td><td>умеренное</td><td>выше (leaf-wise рост)</td><td>ниже (ordered boosting)</td></tr></table><p>LightGBM растит деревья leaf-wise — быстрее, но легче переобучается на малых выборках. CatBoost использует ordered boosting и symmetric trees, что снижает утечку таргета в категориальных признаках.</p><pre><code>import lightgbm as lgb\nmodel = lgb.LGBMClassifier(num_leaves=31, learning_rate=0.05)\nmodel.fit(X_train, y_train, categorical_feature=cat_cols)</code></pre><ul><li>Много категориальных признаков без предобработки → CatBoost</li><li>Огромный датасет, важна скорость → LightGBM</li><li>Нужна зрелая экосистема и множество готовых интеграций → XGBoost</li></ul>",
+      "links": [
+        {"title": "XGBoost Documentation", "url": "https://xgboost.readthedocs.io/"},
+        {"title": "LightGBM Documentation", "url": "https://lightgbm.readthedocs.io/"},
+        {"title": "CatBoost Documentation", "url": "https://catboost.ai/docs/"},
+        {"title": "CatBoost paper (arXiv)", "url": "https://arxiv.org/abs/1706.09516"}
+      ]
+    },
+    {
+      "title": "Архитектуры для изображений: CNN vs Vision Transformer",
+      "level": "🟡 Middle",
+      "explanation": "<p>CNN доминировали в CV десятилетие благодаря индуктивным смещениям (локальность, сдвиговая инвариантность). ViT обходится без них, но требует больше данных.</p><table><tr><th></th><th>CNN (ResNet)</th><th>ViT</th></tr><tr><td>Индуктивные смещения</td><td>сильные</td><td>слабые</td></tr><tr><td>Данные для обучения с нуля</td><td>меньше</td><td>очень много (или pretrain)</td></tr><tr><td>Масштабируемость</td><td>ограничена</td><td>отличная</td></tr><tr><td>Fine-tune на малых датасетах</td><td>хорошо</td><td>нужен сильный pretrain (например DINOv2)</td></tr></table><p>На практике: если данных мало и нет предобученного ViT под домен — берите CNN. Если есть доступ к сильным предобученным ViT (CLIP, DINOv2) — fine-tune часто выигрывает.</p><pre><code>import timm\nmodel = timm.create_model('vit_base_patch16_224', pretrained=True)</code></pre><ul><li>ViT требует patch embedding и часто аугментации типа MixUp</li><li>Гибриды (ConvNeXt) берут лучшее из обоих миров</li></ul>",
+      "links": [
+        {"title": "An Image is Worth 16x16 Words (ViT paper)", "url": "https://arxiv.org/abs/2010.11929"},
+        {"title": "Deep Residual Learning (ResNet paper)", "url": "https://arxiv.org/abs/1512.03385"},
+        {"title": "timm library (PyTorch Image Models)", "url": "https://github.com/huggingface/pytorch-image-models"}
+      ]
+    },
+    {
+      "title": "Последовательности: RNN/LSTM vs Transformer",
+      "level": "🟡 Middle",
+      "explanation": "<p>RNN/LSTM обрабатывают последовательность рекуррентно — шаг за шагом, что ограничивает параллелизм и создаёт проблему затухающих градиентов на длинных цепочках. Transformer заменяет рекурренцию self-attention.</p><table><tr><th></th><th>RNN/LSTM</th><th>Transformer</th></tr><tr><td>Параллелизация обучения</td><td>нет (последовательно)</td><td>да</td></tr><tr><td>Долгие зависимости</td><td>слабо</td><td>хорошо (attention)</td></tr><tr><td>Сложность по длине N</td><td>O(N)</td><td>O(N²) для attention</td></tr><tr><td>Данные для обучения</td><td>меньше</td><td>больше</td></tr></table><p>Transformer практически вытеснил RNN везде, кроме нишевых сценариев (стриминг с жёсткими ограничениями по памяти, где линейные модели типа Mamba/SSM возвращаются как альтернатива квадратичному attention).</p><pre><code># Attention: O(N^2), но полностью параллелен\nscores = Q @ K.T / sqrt(d_k)</code></pre><ul><li>Изучите SSM/Mamba как современную альтернативу для длинных последовательностей</li><li>LSTM всё ещё используют в embedded/edge из-за компактности</li></ul>",
+      "links": [
+        {"title": "Attention Is All You Need (arXiv)", "url": "https://arxiv.org/abs/1706.03762"},
+        {"title": "Understanding LSTM Networks (colah's blog)", "url": "https://colah.github.io/posts/2015-08-Understanding-LSTMs/"},
+        {"title": "The Annotated Transformer", "url": "https://nlp.seas.harvard.edu/annotated-transformer/"}
+      ]
+    },
+    {
+      "title": "LLM-провайдеры: Claude vs GPT vs Gemini",
+      "level": "🟡 Middle",
+      "explanation": "<p>Выбор провайдера — это компромисс между качеством, ценой, контекстным окном и скоростью, а не абсолютный победитель.</p><table><tr><th></th><th>Claude (Anthropic)</th><th>GPT (OpenAI)</th><th>Gemini (Google)</th></tr><tr><td>Контекст</td><td>до 200K+ токенов</td><td>до 128K-1M (o-серия/GPT-4.1)</td><td>до 1M+ (2.5 Pro)</td></tr><tr><td>Сильные стороны</td><td>код, длинный контекст, следование инструкциям</td><td>универсальность, экосистема</td><td>мультимодальность, интеграция с Google</td></tr><tr><td>Кэширование промптов</td><td>да (prompt caching)</td><td>да</td><td>да (context caching)</td></tr><tr><td>Vision/аудио</td><td>vision</td><td>vision+audio realtime</td><td>vision+audio+video нативно</td></tr></table><p>На практике тестируйте на своих реальных задачах (eval-датасет), а не полагайтесь только на паблик-бенчмарки — они легко переобучаются под лидерборды.</p><ul><li>Для агентных задач и кода часто выигрывает Claude</li><li>Для мультимодальных задач с видео — Gemini</li><li>Для широкой экосистемы плагинов — GPT</li></ul>",
+      "links": [
+        {"title": "Anthropic Models Overview", "url": "https://docs.anthropic.com/en/docs/about-claude/models"},
+        {"title": "OpenAI Models Documentation", "url": "https://platform.openai.com/docs/models"},
+        {"title": "Gemini Models", "url": "https://ai.google.dev/gemini-api/docs/models"},
+        {"title": "LMSYS Chatbot Arena Leaderboard", "url": "https://lmarena.ai/"}
+      ]
+    },
+    {
+      "title": "Open-weights модели: Llama vs Qwen vs Mistral vs DeepSeek",
+      "level": "🟡 Middle",
+      "explanation": "<p>Открытые веса дают контроль над данными, хостингом и fine-tuning. Выбор зависит от лицензии, языка и задачи.</p><table><tr><th></th><th>Llama (Meta)</th><th>Qwen (Alibaba)</th><th>Mistral</th><th>DeepSeek</th></tr><tr><td>Лицензия</td><td>кастомная (ограничения на масштаб)</td><td>Apache 2.0 (в основном)</td><td>Apache 2.0</td><td>MIT/кастомная</td></tr><tr><td>Сильная сторона</td><td>экосистема, community</td><td>мультиязычность, размеры</td><td>эффективность на размер</td><td>reasoning, MoE-эффективность</td></tr><tr><td>MoE варианты</td><td>ограниченно</td><td>да</td><td>да (Mixtral)</td><td>да (DeepSeek-V3)</td></tr></table><p>DeepSeek-V3/R1 показали, что MoE + грамотное обучение даёт качество топ-уровня при значительно меньших затратах на inference.</p><pre><code># Запуск через Ollama\nollama pull qwen2.5:7b\nollama run qwen2.5:7b</code></pre><ul><li>Для коммерческого использования всегда сверяйте точный текст лицензии</li><li>Qwen и DeepSeek особенно сильны на многоязычных и reasoning задачах</li></ul>",
+      "links": [
+        {"title": "Llama models (Meta)", "url": "https://www.llama.com/"},
+        {"title": "Qwen GitHub", "url": "https://github.com/QwenLM/Qwen2.5"},
+        {"title": "Mistral AI docs", "url": "https://docs.mistral.ai/"},
+        {"title": "DeepSeek-V3 paper (arXiv)", "url": "https://arxiv.org/abs/2412.19437"}
+      ]
+    },
+    {
+      "title": "Embedding-модели для поиска и RAG",
+      "level": "🟡 Middle",
+      "explanation": "<p>Качество embedding напрямую определяет качество retrieval в RAG-системах. Выбор зависит от языка, длины текста и бюджета.</p><table><tr><th>Модель</th><th>Размерность</th><th>Особенность</th></tr><tr><td>OpenAI text-embedding-3</td><td>1536/3072</td><td>API, хорошее качество out-of-box</td></tr><tr><td>Cohere embed-v3</td><td>1024</td><td>сильна мультиязычность</td></tr><tr><td>BGE / E5 (open-source)</td><td>384-1024</td><td>self-hosted, топ на MTEB</td></tr><tr><td>Voyage AI</td><td>1024-2048</td><td>оптимизирована под code/RAG</td></tr></table><p>Ориентируйтесь на лидерборд MTEB, но проверяйте на своих данных — метрики бенчмарка не всегда переносятся на домен (юридические тексты, код, медицина).</p><pre><code>from sentence_transformers import SentenceTransformer\nmodel = SentenceTransformer('BAAI/bge-large-en-v1.5')\nemb = model.encode(['пример текста'])</code></pre><ul><li>Учитывайте лимит длины входа модели (обычно 512 токенов)</li><li>Матрёшка-эмбеддинги (Matryoshka) позволяют обрезать размерность без сильной потери качества</li></ul>",
+      "links": [
+        {"title": "MTEB Leaderboard", "url": "https://huggingface.co/spaces/mteb/leaderboard"},
+        {"title": "OpenAI Embeddings guide", "url": "https://platform.openai.com/docs/guides/embeddings"},
+        {"title": "BGE models (FlagEmbedding)", "url": "https://github.com/FlagOpen/FlagEmbedding"}
+      ]
+    },
+    {
+      "title": "Векторные БД: FAISS vs Qdrant vs pgvector vs Milvus",
+      "level": "🟡 Middle",
+      "explanation": "<p>Векторное хранилище — критичный компонент RAG. Выбор зависит от масштаба, инфраструктуры и требований к фильтрации.</p><table><tr><th></th><th>FAISS</th><th>Qdrant</th><th>pgvector</th><th>Milvus</th></tr><tr><td>Тип</td><td>библиотека</td><td>отдельный сервис</td><td>расширение Postgres</td><td>распределённая БД</td></tr><tr><td>Масштаб</td><td>до сотен млн (in-memory)</td><td>миллиарды</td><td>десятки млн</td><td>миллиарды, шардинг</td></tr><tr><td>Фильтрация по метаданным</td><td>слабая</td><td>отличная</td><td>SQL-native</td><td>хорошая</td></tr><tr><td>Простота эксплуатации</td><td>требует своей инфры</td><td>средняя</td><td>если уже есть Postgres — минимальная</td><td>сложнее (etcd, minio)</td></tr></table><p>Если у вас уже есть PostgreSQL — pgvector часто самый быстрый путь к продакшену без новой инфраструктуры. Для больших объёмов с частыми обновлениями — Qdrant или Milvus.</p><pre><code>CREATE EXTENSION vector;\nSELECT * FROM docs ORDER BY embedding <-> '[0.1,0.2,...]' LIMIT 5;</code></pre>",
+      "links": [
+        {"title": "FAISS GitHub", "url": "https://github.com/facebookresearch/faiss"},
+        {"title": "Qdrant Documentation", "url": "https://qdrant.tech/documentation/"},
+        {"title": "pgvector GitHub", "url": "https://github.com/pgvector/pgvector"},
+        {"title": "Milvus Documentation", "url": "https://milvus.io/docs"}
+      ]
+    },
+    {
+      "title": "Фреймворки глубокого обучения: PyTorch vs TensorFlow vs JAX",
+      "level": "🟡 Middle",
+      "explanation": "<p>PyTorch стал де-факто стандартом в исследованиях и большей части продакшена, но TensorFlow и JAX всё ещё имеют свои ниши.</p><table><tr><th></th><th>PyTorch</th><th>TensorFlow</th><th>JAX</th></tr><tr><td>Экосистема исследований</td><td>доминирует</td><td>снижается</td><td>растёт (Google DeepMind)</td></tr><tr><td>Продакшн-деплой</td><td>TorchServe, ONNX</td><td>TF Serving, TFLite зрелые</td><td>требует доп. инструментов</td></tr><tr><td>Функциональный стиль</td><td>императивный</td><td>граф (eager по умолчанию сейчас)</td><td>функциональный, composable transforms</td></tr><tr><td>Компиляция/скорость</td><td>torch.compile</td><td>XLA</td><td>XLA нативно, очень быстрый</td></tr></table><p>JAX особенно силён при исследовании новых архитектур и на TPU благодаря <code>jit</code>, <code>vmap</code>, <code>grad</code> как компонуемым трансформациям.</p><pre><code>import torch\nmodel = torch.compile(MyModel())  # ускорение через graph compilation</code></pre>",
+      "links": [
+        {"title": "PyTorch Documentation", "url": "https://pytorch.org/docs/stable/index.html"},
+        {"title": "TensorFlow Guide", "url": "https://www.tensorflow.org/guide"},
+        {"title": "JAX Documentation", "url": "https://jax.readthedocs.io/"}
+      ]
+    },
+    {
+      "title": "Inference-движки: vLLM vs TGI vs Ollama vs llama.cpp",
+      "level": "🔴 Senior",
+      "explanation": "<p>Выбор inference-движка определяет throughput, latency и удобство self-hosting LLM.</p><table><tr><th></th><th>vLLM</th><th>TGI (HF)</th><th>Ollama</th><th>llama.cpp</th></tr><tr><td>Целевой сценарий</td><td>высокий throughput, GPU-сервер</td><td>прод-деплой HF-моделей</td><td>локальная разработка</td><td>CPU/edge, минимум зависимостей</td></tr><tr><td>Ключевая техника</td><td>PagedAttention, continuous batching</td><td>continuous batching, flash-attn</td><td>обёртка над llama.cpp</td><td>квантование GGUF (4/5/8-bit)</td></tr><tr><td>Мультизапросы</td><td>отличная батчировка</td><td>хорошая</td><td>ограниченная</td><td>слабая</td></tr><tr><td>Простота запуска</td><td>средняя</td><td>средняя</td><td>очень простая</td><td>простая, но ручная сборка</td></tr></table><p>Для продакшн-serving с высокой нагрузкой — vLLM де-факто стандарт благодаря PagedAttention, который экономит память KV-cache. Для ноутбука или прототипа — Ollama.</p><pre><code>pip install vllm\npython -m vllm.entrypoints.openai.api_server --model meta-llama/Llama-3-8b</code></pre>",
+      "links": [
+        {"title": "vLLM Documentation", "url": "https://docs.vllm.ai/"},
+        {"title": "Text Generation Inference (TGI)", "url": "https://huggingface.co/docs/text-generation-inference/"},
+        {"title": "Ollama GitHub", "url": "https://github.com/ollama/ollama"},
+        {"title": "llama.cpp GitHub", "url": "https://github.com/ggml-org/llama.cpp"}
+      ]
+    },
+    {
+      "title": "Публичные бенчмарки LLM: как им (не) доверять",
+      "level": "🔴 Senior",
+      "explanation": "<p>MMLU, HumanEval, GSM8K и подобные бенчмарки полезны, но легко подвержены data contamination (модель могла видеть тестовые данные при обучении) и переобучению лабораторий под лидерборд.</p><ul><li><b>Data contamination</b> — тестовые примеры просачиваются в обучающий корпус из интернета</li><li><b>Benchmark gaming</b> — модели дообучают специально под популярные тесты</li><li><b>Устаревание</b> — топовые модели быстро насыщают старые бенчмарки (saturation)</li><li><b>Несоответствие домену</b> — высокий MMLU не гарантирует качество на вашей узкой задаче</li></ul><p>Более надёжные сигналы: LMSYS Chatbot Arena (человеческие сравнения вслепую), приватные held-out бенчмарки (LiveCodeBench с датами после cutoff), и, главное — собственный eval-датасет на реальных задачах продукта.</p><pre><code># Простой каркас собственного eval\nfor case in eval_set:\n    response = model.generate(case.prompt)\n    score = judge_model.score(response, case.expected)</code></pre><table><tr><th>Тип бенчмарка</th><th>Доверие</th></tr><tr><td>Паблик лидерборд (MMLU)</td><td>низкое-среднее</td></tr><tr><td>Human Arena (слепое голосование)</td><td>высокое</td></tr><tr><td>Собственный domain eval</td><td>максимальное</td></tr></table>",
+      "links": [
+        {"title": "LMSYS Chatbot Arena", "url": "https://lmarena.ai/"},
+        {"title": "Data Contamination Quiz (paper)", "url": "https://arxiv.org/abs/2311.09783"},
+        {"title": "HELM (Holistic Evaluation of Language Models)", "url": "https://crfm.stanford.edu/helm/"}
+      ]
+    },
+    {
+      "title": "Как выбирать модель под задачу и бюджет",
+      "level": "🔴 Senior",
+      "explanation": "<p>Выбор модели — инженерное решение с учётом latency, стоимости за токен/запрос, требований к качеству и compliance (данные не должны покидать периметр).</p><ol><li>Определите минимально приемлемое качество через собственный eval, а не 'берём самую мощную'</li><li>Оцените реальную стоимость: цена за 1M токенов × ожидаемый объём запросов в месяц</li><li>Проверьте требования по latency (realtime chat vs batch-обработка ночью)</li><li>Учтите приватность: нужен ли self-hosting из-за регуляций</li></ol><table><tr><th>Сценарий</th><th>Рекомендация</th></tr><tr><td>Простая классификация/экстракция</td><td>маленькая модель (7-8B) или fine-tuned классик</td></tr><tr><td>Сложный reasoning, агенты</td><td>топовый proprietary (Claude/GPT/Gemini flagship)</td></tr><tr><td>Высокий объём, чувствительность к цене</td><td>open-weights + self-host (vLLM)</td></tr><tr><td>Данные не могут покидать периметр</td><td>self-hosted open-weights модель</td></tr></table><p>Часто оптимальна каскадная схема: маленькая модель отвечает на простые запросы, сложные эскалируются к дорогой.</p>",
+      "links": [
+        {"title": "Anthropic: Choosing a model", "url": "https://docs.anthropic.com/en/docs/about-claude/models/choosing-a-model"},
+        {"title": "Artificial Analysis (сравнение моделей по цене/скорости)", "url": "https://artificialanalysis.ai/"},
+        {"title": "OpenAI Pricing", "url": "https://openai.com/api/pricing/"}
+      ]
+    },
+    {
+      "title": "Сравнение по цене и скорости: как читать метрики провайдеров",
+      "level": "🟡 Middle",
+      "explanation": "<p>При сравнении LLM-провайдеров важно смотреть не только на цену за токен, но и на комплекс метрик: TTFT (time to first token), throughput (токенов/сек) и стоимость реального сценария использования.</p><ul><li><b>TTFT</b> — критичен для интерактивных чатов</li><li><b>Tokens/sec (генерация)</b> — важен для длинных ответов и стриминга</li><li><b>Input vs output pricing</b> — обычно output дороже input в 3-5 раз</li><li><b>Prompt caching</b> — может снизить стоимость повторяющегося контекста на 50-90%</li></ul><pre><code>Стоимость запроса ≈\n  (input_tokens × price_in + output_tokens × price_out) / 1_000_000</code></pre><table><tr><th>Метрика</th><th>Когда важна</th></tr><tr><td>TTFT</td><td>чат-интерфейсы, real-time</td></tr><tr><td>Throughput</td><td>batch-обработка, суммаризация больших объёмов</td></tr><tr><td>Context caching</td><td>долгие системные промпты, RAG с постоянным контекстом</td></tr></table><p>Всегда тестируйте на реалистичной длине промпта — короткие тестовые запросы искажают картину по latency.</p>",
+      "links": [
+        {"title": "Artificial Analysis benchmarks", "url": "https://artificialanalysis.ai/"},
+        {"title": "Anthropic Prompt Caching", "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"},
+        {"title": "OpenAI Pricing", "url": "https://openai.com/api/pricing/"}
+      ]
+    },
+    {
+      "title": "Квантование моделей: влияние на качество и скорость",
+      "level": "🔴 Senior",
+      "explanation": "<p>Квантование снижает точность весов (обычно с FP16 до INT8/INT4), уменьшая память и ускоряя inference — критично при сравнении моделей 'как они будут работать в проде'.</p><table><tr><th>Формат</th><th>Память</th><th>Потеря качества</th><th>Где используется</th></tr><tr><td>FP16/BF16</td><td>базовая</td><td>нет</td><td>обучение, серверный inference</td></tr><tr><td>INT8</td><td>~2x меньше</td><td>минимальная</td><td>прод-serving</td></tr><tr><td>INT4 (GPTQ/AWQ)</td><td>~4x меньше</td><td>заметная на сложных задачах</td><td>локальный запуск, edge</td></tr><tr><td>GGUF Q4_K_M</td><td>~4x меньше</td><td>умеренная</td><td>llama.cpp, Ollama</td></tr></table><p>При сравнении open-weights моделей всегда уточняйте, в каком квантовании тестировался бенчмарк — INT4 версия той же модели может заметно уступать FP16 на reasoning-задачах.</p><pre><code># Квантование через AWQ\npython -m awq.quantize --model llama-3-8b --w_bit 4</code></pre>",
+      "links": [
+        {"title": "AWQ paper (arXiv)", "url": "https://arxiv.org/abs/2306.00978"},
+        {"title": "GPTQ paper (arXiv)", "url": "https://arxiv.org/abs/2210.17323"},
+        {"title": "llama.cpp quantization guide", "url": "https://github.com/ggml-org/llama.cpp/blob/master/examples/quantize/README.md"}
+      ]
+    }
+  ],
+  "quiz": [
+    {"q": "Какой алгоритм лучше всего подходит как быстрый интерпретируемый baseline перед сложными моделями?", "options": ["SVM с RBF-ядром", "Логистическая регрессия", "kNN с k=1", "Глубокая нейросеть"], "answer": 1, "explain": "Логистическая регрессия быстро обучается, легко интерпретируется и служит эталоном для сравнения более сложных моделей."},
+    {"q": "Какая особенность CatBoost выделяет его среди XGBoost и LightGBM?", "options": ["Работа только на GPU", "Нативная обработка категориальных признаков через ordered boosting", "Отсутствие поддержки регрессии", "Требует OHE для всех признаков"], "answer": 1, "explain": "CatBoost использует ordered boosting и специальную обработку категориальных признаков, снижая утечку таргета без ручного OHE."},
+    {"q": "В чём главное преимущество Transformer перед RNN/LSTM при обучении?", "options": ["Меньше параметров", "Возможность полной параллелизации обучения через self-attention", "Линейная сложность по длине последовательности", "Отсутствие необходимости в данных"], "answer": 1, "explain": "Self-attention обрабатывает все позиции последовательности параллельно, в отличие от последовательной рекурренции RNN."},
+    {"q": "Что такое PagedAttention в vLLM?", "options": ["Метод квантования весов модели", "Техника эффективного управления памятью KV-cache для батчирования запросов", "Алгоритм токенизации", "Способ сжатия эмбеддингов"], "answer": 1, "explain": "PagedAttention организует KV-cache блоками, аналогично виртуальной памяти ОС, что позволяет эффективно батчировать множество запросов."},
+    {"q": "Почему высокий результат модели на MMLU не гарантирует качество на вашей задаче?", "options": ["MMLU измеряет только скорость inference", "Возможна data contamination и несоответствие домену бенчмарка", "MMLU доступен только для open-weights моделей", "Результаты MMLU обновляются раз в год"], "answer": 1, "explain": "Публичные бенчмарки подвержены утечке тестовых данных в обучающий корпус и не всегда отражают специфику узкого домена."},
+    {"q": "Какая векторная БД — оптимальный выбор, если в компании уже используется PostgreSQL и нужен быстрый путь в прод?", "options": ["Milvus", "pgvector", "FAISS", "Отдельный кластер Qdrant"], "answer": 1, "explain": "pgvector — расширение PostgreSQL, позволяющее добавить векторный поиск без новой инфраструктуры."},
+    {"q": "Что происходит при квантовании модели с FP16 до INT4?", "options": ["Качество всегда улучшается", "Память уменьшается примерно в 4 раза, возможна заметная потеря качества на сложных задачах", "Модель перестаёт работать на GPU", "Размер контекстного окна увеличивается"], "answer": 1, "explain": "INT4-квантование существенно экономит память и ускоряет inference, но может ощутимо просаживать качество на reasoning-задачах."},
+    {"q": "Какая техника композиции трансформаций (jit, vmap, grad) отличает JAX от PyTorch/TensorFlow?", "options": ["Отсутствие поддержки автодифференцирования", "Функциональный, компонуемый стиль трансформаций", "Работа только на CPU", "Отсутствие поддержки нейросетей"], "answer": 1, "explain": "JAX построен вокруг функциональных, компонуемых трансформаций (jit-компиляция, векторизация vmap, автодифференцирование grad)."},
+    {"q": "Какая метрика наиболее критична для интерактивного чат-интерфейса с LLM?", "options": ["Throughput батч-обработки", "TTFT (time to first token)", "Размер модели в параметрах", "Стоимость обучения модели"], "answer": 1, "explain": "TTFT определяет, насколько быстро пользователь увидит начало ответа, что критично для ощущения отзывчивости чата."},
+    {"q": "Что дают Matryoshka-эмбеддинги при выборе embedding-модели для RAG?", "options": ["Увеличение размерности без потери скорости", "Возможность обрезать размерность вектора без сильной потери качества", "Автоматический перевод текста", "Замену векторной БД на реляционную"], "answer": 1, "explain": "Matryoshka representation learning позволяет использовать усечённые эмбеддинги меньшей размерности, экономя память при небольшой потере точности."}
+  ]
+}

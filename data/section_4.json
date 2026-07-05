@@ -1,0 +1,388 @@
+{
+  "phase": "Phase 2 — Classical ML",
+  "section": "🎯 Основы ML",
+  "topics": [
+    {
+      "title": "Типы задач ML: классификация, регрессия, ранжирование",
+      "level": "🟢 Junior",
+      "explanation": "<p>Первое, что нужно понять перед выбором модели — <b>тип задачи</b>. От него зависит функция потерь, метрики и архитектура.</p><ul><li><b>Классификация</b> — предсказываем дискретный класс (спам/не спам, кот/собака). Метрики: accuracy, F1, ROC-AUC.</li><li><b>Регрессия</b> — предсказываем непрерывное число (цена квартиры). Метрики: MAE, MSE, RMSE, R².</li><li><b>Ранжирование</b> — важен не сам ответ, а порядок объектов (поисковая выдача, рекомендации). Метрики: NDCG, MAP.</li></ul><p>Типичная ошибка джуна — использовать accuracy для регрессии или MSE для классификации. Ещё одна: применять обычную регрессию для ранжирования, игнорируя, что порядок важнее абсолютных значений.</p><pre><code># Пример: классификация vs регрессия в sklearn\nfrom sklearn.linear_model import LogisticRegression, LinearRegression\n\nclf = LogisticRegression()   # классификация\nreg = LinearRegression()     # регрессия\n</code></pre><p>Совет: перед тем как писать код, всегда спрашивайте себя — «что именно я предсказываю и как это будет измеряться в проде?». Часто бизнес-задача формулируется расплывчато, а её нужно перевести в конкретный ML-таргет.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Supervised learning",
+          "url": "https://scikit-learn.org/stable/supervised_learning.html"
+        },
+        {
+          "title": "Learning to Rank (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Learning_to_rank"
+        },
+        {
+          "title": "scikit-learn: Model evaluation",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html"
+        }
+      ]
+    },
+    {
+      "title": "Supervised vs Unsupervised vs Reinforcement Learning",
+      "level": "🟢 Junior",
+      "explanation": "<p>Три базовые парадигмы обучения различаются наличием и типом сигнала обратной связи.</p><table><tr><th>Тип</th><th>Данные</th><th>Пример</th></tr><tr><td>Supervised</td><td>X + y (размеченные)</td><td>Классификация спама</td></tr><tr><td>Unsupervised</td><td>только X</td><td>Кластеризация клиентов</td></tr><tr><td>Reinforcement</td><td>среда + награда</td><td>Игровой бот, робот</td></tr></table><p>В продакшене 90% задач — supervised learning, потому что размеченные данные проще валидировать. Unsupervised часто используется как этап пред-обработки (например, снижение размерности через PCA перед кластеризацией) или для поиска аномалий.</p><pre><code>from sklearn.cluster import KMeans\nfrom sklearn.linear_model import LogisticRegression\n\n# Unsupervised: находим структуру без меток\nkmeans = KMeans(n_clusters=3).fit(X)\n\n# Supervised: учимся на размеченных данных\nclf = LogisticRegression().fit(X, y)\n</code></pre><p>Типичная ошибка — пытаться решить задачу с RL, когда достаточно supervised (RL сложен в отладке и требует симулятора среды). Начинайте всегда с самого простого подхода.</p>",
+      "links": [
+        {
+          "title": "Supervised learning (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Supervised_learning"
+        },
+        {
+          "title": "Unsupervised learning (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Unsupervised_learning"
+        },
+        {
+          "title": "Reinforcement learning (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Reinforcement_learning"
+        }
+      ]
+    },
+    {
+      "title": "Train/Test split и кросс-валидация",
+      "level": "🟢 Junior",
+      "explanation": "<p>Модель нужно оценивать на данных, которые она не видела при обучении — иначе получите завышенную и бесполезную метрику.</p><pre><code>from sklearn.model_selection import train_test_split, cross_val_score\n\nX_train, X_test, y_train, y_test = train_test_split(\n    X, y, test_size=0.2, random_state=42, stratify=y\n)\n\nscores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')\nprint(scores.mean(), scores.std())\n</code></pre><ul><li><b>stratify=y</b> обязателен при несбалансированных классах.</li><li><b>K-fold CV</b> даёт более надёжную оценку, чем один split, особенно на маленьких датасетах.</li><li>Для временных рядов используйте <code>TimeSeriesSplit</code> — обычный random split приведёт к утечке данных из будущего в прошлое.</li></ul><p>Частая продакшен-ошибка (data leakage): нормализация/OHE делается ДО split на всех данных сразу — тестовая выборка «подглядывает» статистику. Правильно — fit только на train, transform на train и test отдельно, а лучше всего использовать Pipeline.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Cross-validation",
+          "url": "https://scikit-learn.org/stable/modules/cross_validation.html"
+        },
+        {
+          "title": "sklearn.model_selection.train_test_split",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html"
+        },
+        {
+          "title": "sklearn.model_selection.TimeSeriesSplit",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html"
+        }
+      ]
+    },
+    {
+      "title": "Переобучение и недообучение (overfitting/underfitting)",
+      "level": "🟢 Junior",
+      "explanation": "<p><b>Underfitting</b> — модель слишком простая, не улавливает закономерности (высокая ошибка и на train, и на test). <b>Overfitting</b> — модель выучила шум обучающей выборки (низкая ошибка на train, высокая на test).</p><pre><code>train_acc = model.score(X_train, y_train)\ntest_acc = model.score(X_test, y_test)\nprint(f'train={train_acc:.3f} test={test_acc:.3f}')\n# train=0.99 test=0.65 -> overfitting\n# train=0.60 test=0.58 -> underfitting</code></pre><p>Способы борьбы с overfitting:</p><ul><li>Больше данных / аугментация</li><li>Регуляризация (L1/L2, dropout)</li><li>Упрощение модели, уменьшение глубины деревьев</li><li>Early stopping</li><li>Кросс-валидация для подбора гиперпараметров</li></ul><p>Способы борьбы с underfitting: усложнить модель, добавить фичи, убрать избыточную регуляризацию. Всегда стройте learning curve (зависимость ошибки от размера выборки) — это лучший диагностический инструмент, который недооценивают джуны.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Underfitting vs Overfitting",
+          "url": "https://scikit-learn.org/stable/auto_examples/model_selection/plot_underfitting_overfitting.html"
+        },
+        {
+          "title": "Overfitting (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Overfitting"
+        },
+        {
+          "title": "scikit-learn: Validation curves",
+          "url": "https://scikit-learn.org/stable/modules/learning_curve.html"
+        }
+      ]
+    },
+    {
+      "title": "Bias-Variance Tradeoff",
+      "level": "🟡 Middle",
+      "explanation": "<p>Ошибка модели раскладывается как: <code>Error = Bias² + Variance + Irreducible Noise</code>.</p><ul><li><b>Bias (смещение)</b> — систематическая ошибка из-за слишком простых предположений модели (пример: линейная регрессия на нелинейных данных).</li><li><b>Variance (разброс)</b> — чувствительность модели к конкретной обучающей выборке (пример: глубокое дерево решений без ограничений).</li></ul><p>Простые модели (линейные) — high bias, low variance. Сложные (деревья без ограничений, KNN с малым k) — low bias, high variance.</p><pre><code># Иллюстрация trade-off через сложность модели\nfrom sklearn.tree import DecisionTreeRegressor\nfor depth in [1, 3, 5, 10, None]:\n    model = DecisionTreeRegressor(max_depth=depth)\n    # растущая глубина: bias падает, variance растёт\n</code></pre><p>На практике задача ML-инженера — найти «sweet spot» через регуляризацию, ансамблирование (бэггинг снижает variance, бустинг снижает bias) и правильный подбор гиперпараметров через CV. Ансамбли типа Random Forest — классический пример снижения variance без роста bias за счёт усреднения множества деревьев.</p>",
+      "links": [
+        {
+          "title": "Bias-variance tradeoff (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Bias%E2%80%93variance_tradeoff"
+        },
+        {
+          "title": "scikit-learn: Bias-Variance decomposition example",
+          "url": "https://scikit-learn.org/stable/auto_examples/ensemble/plot_bias_variance.html"
+        },
+        {
+          "title": "scikit-learn: Ensemble methods",
+          "url": "https://scikit-learn.org/stable/modules/ensemble.html"
+        }
+      ]
+    },
+    {
+      "title": "Линейная регрессия",
+      "level": "🟢 Junior",
+      "explanation": "<p>Базовый алгоритм: предсказывает <code>y = w·x + b</code>, минимизируя сумму квадратов ошибок (MSE).</p><pre><code>from sklearn.linear_model import LinearRegression\nimport numpy as np\n\nmodel = LinearRegression()\nmodel.fit(X_train, y_train)\npred = model.predict(X_test)\nprint(model.coef_, model.intercept_)\n</code></pre><p>Предположения, которые часто нарушаются на практике: линейность связи, независимость остатков, отсутствие мультиколлинеарности (сильно коррелированных признаков), гомоскедастичность. Если признаки коррелируют — коэффициенты становятся нестабильными и плохо интерпретируемыми, тогда стоит использовать Ridge.</p><p>Важно: линейная регрессия чувствительна к выбросам и к масштабу признаков при использовании градиентного спуска (в sklearn по умолчанию используется точное аналитическое решение, но при больших данных — SGDRegressor, где масштабирование критично).</p><pre><code>from sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\npipe = make_pipeline(StandardScaler(), LinearRegression())\npipe.fit(X_train, y_train)</code></pre><p>Всегда используйте линейную регрессию как baseline перед сложными моделями — она быстрая и интерпретируемая.</p>",
+      "links": [
+        {
+          "title": "sklearn.linear_model.LinearRegression",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html"
+        },
+        {
+          "title": "scikit-learn: Linear Models guide",
+          "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+        },
+        {
+          "title": "Ordinary least squares (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Ordinary_least_squares"
+        }
+      ]
+    },
+    {
+      "title": "Логистическая регрессия",
+      "level": "🟢 Junior",
+      "explanation": "<p>Несмотря на название — алгоритм классификации. Применяет сигмоиду к линейной комбинации признаков, получая вероятность класса.</p><pre><code>from sklearn.linear_model import LogisticRegression\n\nclf = LogisticRegression(C=1.0, max_iter=1000)\nclf.fit(X_train, y_train)\nproba = clf.predict_proba(X_test)[:, 1]\npred = clf.predict(X_test)\n</code></pre><p>Ключевые моменты для продакшена:</p><ul><li><code>C</code> — обратный коэффициент регуляризации: чем меньше C, тем сильнее регуляризация.</li><li>Используйте <code>predict_proba</code>, а не только <code>predict</code> — часто нужен порог, отличный от 0.5 (например, при дисбалансе классов).</li><li>При несбалансированных классах: <code>class_weight='balanced'</code>.</li></ul><p>Частая ошибка — забывать, что логрегрессия линейна по границе решения. Если данные нелинейно разделимы, нужно добавлять полиномиальные признаки или переходить на деревья/SVM с ядром. Логрегрессия — отличный, быстрый и объяснимый baseline для бинарной классификации, часто требуемый в финтехе за интерпретируемость.</p>",
+      "links": [
+        {
+          "title": "sklearn.linear_model.LogisticRegression",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html"
+        },
+        {
+          "title": "scikit-learn: Logistic regression guide",
+          "url": "https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression"
+        },
+        {
+          "title": "Logistic regression (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Logistic_regression"
+        }
+      ]
+    },
+    {
+      "title": "Метод k ближайших соседей (kNN)",
+      "level": "🟢 Junior",
+      "explanation": "<p>kNN — «ленивый» алгоритм: не строит модель заранее, а на этапе предсказания ищет k ближайших точек в обучающей выборке и голосует (классификация) или усредняет (регрессия).</p><pre><code>from sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import make_pipeline\n\nmodel = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5))\nmodel.fit(X_train, y_train)\n</code></pre><ul><li><b>Обязательно масштабируйте признаки</b> — kNN основан на расстояниях, признак с большим диапазоном значений «задавит» остальные.</li><li>Маленький k → высокий variance (переобучение на шум). Большой k → высокий bias (сглаживание границ).</li><li>Проклятие размерности: в высокоразмерных пространствах все точки становятся «одинаково далеки», kNN деградирует.</li></ul><p>Главная продакшен-проблема — медленный инференс на больших данных (O(n) на каждый запрос без индексов). Для реальных систем используют приближённые методы (FAISS, HNSW, Annoy) вместо brute-force kNN.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Nearest Neighbors",
+          "url": "https://scikit-learn.org/stable/modules/neighbors.html"
+        },
+        {
+          "title": "sklearn.neighbors.KNeighborsClassifier",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsClassifier.html"
+        },
+        {
+          "title": "FAISS (Facebook AI Similarity Search)",
+          "url": "https://github.com/facebookresearch/faiss"
+        }
+      ]
+    },
+    {
+      "title": "Наивный Байес",
+      "level": "🟡 Middle",
+      "explanation": "<p>Вероятностный классификатор, основанный на теореме Байеса с «наивным» предположением о независимости признаков при условии класса.</p><pre><code>from sklearn.naive_bayes import MultinomialNB, GaussianNB\n\n# Для текстов (частоты слов)\nclf = MultinomialNB()\nclf.fit(X_train_counts, y_train)\n\n# Для непрерывных признаков\nclf_g = GaussianNB()\nclf_g.fit(X_train, y_train)\n</code></pre><p>Несмотря на упрощённое предположение о независимости (которое почти всегда нарушается в реальных данных), NB неплохо работает на задачах текстовой классификации (спам-фильтры, тональность) благодаря простоте и устойчивости к малому объёму данных.</p><ul><li><code>MultinomialNB</code> — для счётчиков слов (bag-of-words, TF-IDF).</li><li><code>GaussianNB</code> — для непрерывных признаков с нормальным распределением.</li><li><code>BernoulliNB</code> — для бинарных признаков.</li></ul><p>Совет: NB — отличный быстрый baseline для NLP-задач до перехода на TF-IDF+LogReg или трансформеры. Проблема нулевых вероятностей (слово не встречалось в train) решается сглаживанием Лапласа (<code>alpha</code> параметр).</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Naive Bayes",
+          "url": "https://scikit-learn.org/stable/modules/naive_bayes.html"
+        },
+        {
+          "title": "Naive Bayes classifier (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Naive_Bayes_classifier"
+        },
+        {
+          "title": "sklearn.naive_bayes.MultinomialNB",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.MultinomialNB.html"
+        }
+      ]
+    },
+    {
+      "title": "Метод опорных векторов (SVM)",
+      "level": "🟡 Middle",
+      "explanation": "<p>SVM ищет гиперплоскость, максимизирующую отступ (margin) между классами. С помощью ядер (kernel trick) может строить нелинейные границы.</p><pre><code>from sklearn.svm import SVC\n\nclf = SVC(kernel='rbf', C=1.0, gamma='scale')\nclf.fit(X_train, y_train)\n</code></pre><table><tr><th>Ядро</th><th>Когда использовать</th></tr><tr><td>linear</td><td>Много признаков, мало примеров (текст)</td></tr><tr><td>rbf</td><td>Нелинейные границы, средние датасеты</td></tr><tr><td>poly</td><td>Полиномиальные зависимости</td></tr></table><ul><li><code>C</code> — компромисс между шириной margin и ошибками на train (больше C = меньше регуляризация).</li><li><code>gamma</code> в RBF — «дальность влияния» одной точки; большое значение ведёт к overfitting.</li></ul><p>Главный недостаток в продакшене: SVM плохо масштабируется — O(n²)–O(n³) по времени обучения, поэтому на датасетах больше ~100k строк почти не используется, уступая место градиентному бустингу. Обязательно масштабируйте признаки перед SVM.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Support Vector Machines",
+          "url": "https://scikit-learn.org/stable/modules/svm.html"
+        },
+        {
+          "title": "sklearn.svm.SVC",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html"
+        },
+        {
+          "title": "Support vector machine (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Support_vector_machine"
+        }
+      ]
+    },
+    {
+      "title": "Регуляризация L1 и L2",
+      "level": "🟡 Middle",
+      "explanation": "<p>Регуляризация добавляет штраф за большие веса модели в функцию потерь, чтобы бороться с overfitting.</p><ul><li><b>L2 (Ridge)</b>: штраф ∑w² — «сжимает» веса к нулю, но редко зануляет полностью. Хорошо при мультиколлинеарности.</li><li><b>L1 (Lasso)</b>: штраф ∑|w| — может занулять веса полностью, выполняя отбор признаков (feature selection).</li><li><b>ElasticNet</b> — комбинация L1+L2.</li></ul><pre><code>from sklearn.linear_model import Ridge, Lasso, ElasticNet\n\nridge = Ridge(alpha=1.0).fit(X_train, y_train)\nlasso = Lasso(alpha=0.1).fit(X_train, y_train)\nelastic = ElasticNet(alpha=0.1, l1_ratio=0.5).fit(X_train, y_train)\n\nprint((lasso.coef_ == 0).sum(), 'признаков занулено')\n</code></pre><p>В логистической регрессии и SVM параметр <code>C</code> — это обратная сила регуляризации (<code>alpha</code> в Ridge/Lasso — прямая). Подбирайте силу регуляризации через <code>GridSearchCV</code> или <code>RidgeCV</code>/<code>LassoCV</code> с кросс-валидацией, а не вручную. Не забывайте масштабировать признаки — регуляризация штрафует веса без учёта масштаба фичи.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Linear Models — Regularization",
+          "url": "https://scikit-learn.org/stable/modules/linear_model.html#ridge-regression-and-classification"
+        },
+        {
+          "title": "sklearn.linear_model.Lasso",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html"
+        },
+        {
+          "title": "Tikhonov regularization (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Ridge_regression"
+        }
+      ]
+    },
+    {
+      "title": "API scikit-learn: fit / predict / Pipeline",
+      "level": "🟢 Junior",
+      "explanation": "<p>Единый интерфейс sklearn — одна из причин его популярности: любой алгоритм имеет методы <code>fit</code>, <code>predict</code>/<code>transform</code>.</p><pre><code>from sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.impute import SimpleImputer\nfrom sklearn.linear_model import LogisticRegression\n\npipe = Pipeline([\n    ('imputer', SimpleImputer(strategy='median')),\n    ('scaler', StandardScaler()),\n    ('clf', LogisticRegression())\n])\npipe.fit(X_train, y_train)\npipe.predict(X_test)\n</code></pre><p>Почему Pipeline критичен в продакшене:</p><ul><li>Предотвращает data leakage — все трансформации fit'ятся только на train внутри каждого фолда CV.</li><li>Упрощает деплой — сохраняете один объект (<code>joblib.dump(pipe, 'model.pkl')</code>) вместо набора отдельных препроцессоров.</li><li>Поддерживает <code>GridSearchCV</code> напрямую по всей цепочке.</li></ul><p>Типичная ошибка джуна — делать <code>scaler.fit_transform(X)</code> на всём датасете до split. Правильно: строить Pipeline и передавать его целиком в <code>train_test_split</code>/<code>cross_val_score</code>.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Pipelines and composite estimators",
+          "url": "https://scikit-learn.org/stable/modules/compose.html"
+        },
+        {
+          "title": "sklearn.pipeline.Pipeline",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html"
+        },
+        {
+          "title": "scikit-learn: Getting Started",
+          "url": "https://scikit-learn.org/stable/getting_started.html"
+        }
+      ]
+    },
+    {
+      "title": "Baseline-модели и их роль",
+      "level": "🟡 Middle",
+      "explanation": "<p>Прежде чем строить сложную модель, всегда стройте baseline — простое решение, задающее нижнюю планку качества.</p><pre><code>from sklearn.dummy import DummyClassifier, DummyRegressor\n\n# Классификация: предсказывать самый частый класс\ndummy = DummyClassifier(strategy='most_frequent')\ndummy.fit(X_train, y_train)\nprint('baseline accuracy:', dummy.score(X_test, y_test))\n\n# Регрессия: предсказывать среднее\ndummy_reg = DummyRegressor(strategy='mean')\n</code></pre><p>Зачем это нужно:</p><ul><li>Если ваша «умная» модель даёт accuracy 0.85, а baseline (most_frequent) — 0.83 из-за дисбаланса классов, модель почти бесполезна.</li><li>Baseline помогает поймать баги в пайплайне на раннем этапе — если сложная модель хуже линейной регрессии, скорее всего проблема в данных, а не в алгоритме.</li><li>В бизнес-отчётах baseline даёт понятную точку отсчёта для стейкхолдеров.</li></ul><p>Хорошая практика: всегда идти по лестнице сложности — Dummy → линейная модель → дерево/бустинг → нейросеть, измеряя прирост качества на каждом шаге и сопоставляя его со стоимостью поддержки модели.</p>",
+      "links": [
+        {
+          "title": "sklearn.dummy.DummyClassifier",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyClassifier.html"
+        },
+        {
+          "title": "sklearn.dummy.DummyRegressor",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyRegressor.html"
+        },
+        {
+          "title": "scikit-learn: Model evaluation",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html"
+        }
+      ]
+    },
+    {
+      "title": "Метрики качества классификации и регрессии",
+      "level": "🔴 Senior",
+      "explanation": "<p>Выбор метрики — стратегическое решение, влияющее на бизнес-результат, а не техническая деталь.</p><table><tr><th>Задача</th><th>Метрика</th><th>Когда использовать</th></tr><tr><td>Классификация</td><td>Precision</td><td>Дорога цена ложноположительных (спам-фильтр)</td></tr><tr><td>Классификация</td><td>Recall</td><td>Дорога цена пропуска (детекция мошенничества, болезней)</td></tr><tr><td>Классификация</td><td>ROC-AUC</td><td>Общая разделяющая способность, сбалансированные классы</td></tr><tr><td>Классификация</td><td>PR-AUC</td><td>Сильный дисбаланс классов</td></tr><tr><td>Регрессия</td><td>MAE</td><td>Устойчивость к выбросам важна</td></tr><tr><td>Регрессия</td><td>RMSE</td><td>Большие ошибки должны штрафоваться сильнее</td></tr></table><pre><code>from sklearn.metrics import classification_report, roc_auc_score, mean_absolute_error\n\nprint(classification_report(y_test, pred))\nprint('AUC:', roc_auc_score(y_test, proba))\nprint('MAE:', mean_absolute_error(y_test, y_pred_reg))\n</code></pre><p>Senior-уровень мышления: метрику нужно выбирать вместе с бизнесом ДО начала моделирования, а не подгонять после. При сильном дисбалансе классов accuracy вводит в заблуждение — модель, всегда предсказывающая «здоров», может иметь 99% accuracy при 1% больных, но нулевую пользу. Всегда смотрите confusion matrix, а не одно число.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Classification metrics",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#classification-metrics"
+        },
+        {
+          "title": "sklearn.metrics.roc_auc_score",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html"
+        },
+        {
+          "title": "sklearn.metrics.classification_report",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html"
+        },
+        {
+          "title": "Precision and recall (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Precision_and_recall"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Какая метрика подходит для задачи регрессии?",
+      "options": [
+        "F1-score",
+        "RMSE",
+        "ROC-AUC",
+        "Precision"
+      ],
+      "answer": 1,
+      "explain": "RMSE (Root Mean Squared Error) измеряет ошибку в непрерывных предсказаниях, тогда как F1, ROC-AUC и Precision применяются в классификации."
+    },
+    {
+      "q": "Что характерно для обучения с учителем (supervised learning)?",
+      "options": [
+        "Данные не содержат меток",
+        "Модель обучается на парах (X, y) с известными ответами",
+        "Обучение происходит через награды от среды",
+        "Используется только для кластеризации"
+      ],
+      "answer": 1,
+      "explain": "Supervised learning требует размеченных данных — пар признаков X и целевой переменной y."
+    },
+    {
+      "q": "Зачем нужен train/test split?",
+      "options": [
+        "Чтобы ускорить обучение модели",
+        "Чтобы уменьшить размер датасета",
+        "Чтобы оценить модель на данных, которые она не видела при обучении",
+        "Чтобы избежать использования кросс-валидации"
+      ],
+      "answer": 2,
+      "explain": "Split нужен для честной оценки обобщающей способности модели на новых данных, иначе метрика будет завышена."
+    },
+    {
+      "q": "Модель показывает accuracy 0.99 на train и 0.60 на test. Что это?",
+      "options": [
+        "Underfitting",
+        "Overfitting",
+        "Идеальная модель",
+        "Data leakage в обратную сторону"
+      ],
+      "answer": 1,
+      "explain": "Большой разрыв между train и test accuracy — классический признак переобучения (overfitting)."
+    },
+    {
+      "q": "Что снижает variance модели в bias-variance tradeoff?",
+      "options": [
+        "Увеличение глубины дерева решений",
+        "Уменьшение количества обучающих примеров",
+        "Бэггинг (например, Random Forest)",
+        "Удаление регуляризации"
+      ],
+      "answer": 2,
+      "explain": "Бэггинг усредняет предсказания множества моделей, обученных на разных подвыборках, что снижает variance."
+    },
+    {
+      "q": "Какой параметр в логистической регрессии sklearn отвечает за силу регуляризации?",
+      "options": [
+        "alpha",
+        "C",
+        "gamma",
+        "lambda"
+      ],
+      "answer": 1,
+      "explain": "В LogisticRegression sklearn используется параметр C — обратный коэффициент силы регуляризации (меньше C = сильнее регуляризация)."
+    },
+    {
+      "q": "Почему для kNN важно масштабирование признаков?",
+      "options": [
+        "kNN не работает без масштабирования вообще",
+        "Алгоритм основан на расстояниях, и признаки с большим диапазоном будут доминировать",
+        "Масштабирование ускоряет fit()",
+        "Это требование только для регрессии, не для классификации"
+      ],
+      "answer": 1,
+      "explain": "kNN вычисляет расстояния между точками, поэтому признаки в разных масштабах искажают результат без нормализации."
+    },
+    {
+      "q": "Чем отличается L1-регуляризация (Lasso) от L2 (Ridge)?",
+      "options": [
+        "L1 может занулять веса признаков, выполняя отбор признаков; L2 только уменьшает их",
+        "L1 работает только с деревьями решений",
+        "L2 всегда даёт худшее качество, чем L1",
+        "Разницы нет, это синонимы"
+      ],
+      "answer": 0,
+      "explain": "L1-регуляризация способна полностью занулять веса неинформативных признаков (feature selection), L2 лишь уменьшает их величину."
+    },
+    {
+      "q": "Зачем нужна baseline-модель (например, DummyClassifier)?",
+      "options": [
+        "Чтобы заменить финальную модель в продакшене",
+        "Чтобы задать нижнюю планку качества и проверить, что сложная модель действительно полезна",
+        "Baseline нужен только для регрессии",
+        "Чтобы ускорить обучение основной модели"
+      ],
+      "answer": 1,
+      "explain": "Baseline показывает минимальный ожидаемый уровень качества и помогает выявить проблемы в пайплайне, если сложная модель его не превосходит."
+    },
+    {
+      "q": "Почему использование Pipeline в scikit-learn считается лучшей практикой?",
+      "options": [
+        "Pipeline работает быстрее, чем отдельные вызовы fit/transform",
+        "Pipeline предотвращает утечку данных (data leakage) и упрощает деплой модели",
+        "Pipeline автоматически подбирает гиперпараметры",
+        "Pipeline нужен только для нейросетей"
+      ],
+      "answer": 1,
+      "explain": "Pipeline гарантирует, что трансформации (масштабирование, импутация) обучаются только на train-фолде, и позволяет сохранять весь препроцессинг вместе с моделью для деплоя."
+    }
+  ]
+}

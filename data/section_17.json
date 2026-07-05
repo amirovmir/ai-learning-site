@@ -1,0 +1,415 @@
+{
+  "phase": "Phase 5 — MLOps & Production",
+  "section": "🏗️ ML System Design и карьера",
+  "topics": [
+    {
+      "title": "Структура ML System Design интервью",
+      "level": "🟡 Middle",
+      "explanation": "<p>ML System Design интервью — это не про то, чтобы вспомнить формулу F1-score, а про способность провести собеседника от расплывчатой бизнес-идеи до работающей системы. Универсальный каркас, который держат в голове интервьюеры:</p><ul><li><b>Clarify</b> — уточнить требования: кто пользователь, какая метрика бизнеса важна, latency-бюджет, объём данных, ограничения по железу/бюджету.</li><li><b>Metrics</b> — offline (precision/recall, NDCG, AUC) и online (CTR, retention, revenue).</li><li><b>Data</b> — источники, разметка, баланс классов, дрифт.</li><li><b>Baseline</b> — простая модель (эвристика, логрег) до сложной.</li><li><b>Architecture</b> — пайплайн: feature store → training → serving → monitoring.</li><li><b>Trade-offs</b> — latency vs accuracy, batch vs real-time, cost.</li></ul><p>Типичная ошибка джунов — сразу предлагать трансформер на 7B параметров для задачи, где хватило бы градиентного бустинга. Сеньоры всегда начинают с вопроса «а какая метрика определяет успех бизнеса» и явно проговаривают допущения вслух — это то, что оценивают больше всего.</p><pre><code># Псевдо-чеклист, который держат в голове на интервью\nsteps = [\n    \"clarify_requirements\",\n    \"define_metrics (offline + online)\",\n    \"data_pipeline\",\n    \"baseline_model\",\n    \"scale_architecture\",\n    \"monitoring_and_feedback_loop\",\n]</code></pre>",
+      "links": [
+        {
+          "title": "ML System Design (Chip Huyen, Designing ML Systems)",
+          "url": "https://huyenchip.com/machine-learning-systems-design/toc.html"
+        },
+        {
+          "title": "Exponent ML System Design Guide",
+          "url": "https://www.tryexponent.com/blog/ml-system-design-interview"
+        },
+        {
+          "title": "Google ML Rules of ML",
+          "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+        }
+      ]
+    },
+    {
+      "title": "Постановка бизнес-задачи как ML-задачи",
+      "level": "🟢 Junior",
+      "explanation": "<p>Главный навык уровня middle+ — переводить фразы менеджера («хотим удерживать клиентов») в формальную ML-постановку. Алгоритм:</p><ul><li>Определить целевую переменную (target): что именно предсказываем? Отток за 30 дней — бинарная классификация.</li><li>Определить unit of prediction: пользователь, сессия, транзакция.</li><li>Определить, что оптимизируем: recall (не пропустить отток) или precision (не спамить скидками всех подряд).</li><li>Проверить, решаема ли задача вообще ML — иногда достаточно правила «если 30 дней не заходил → email».</li></ul><p>Частая ошибка — сразу лезть в модель, не выяснив, как решение будет использовано. Если продакт-менеджер хочет «топ-3 причины оттока», это уже не просто классификация, а задача интерпретируемости — потребуется SHAP или простая логрег вместо чёрного ящика.</p><table><tr><th>Бизнес-фраза</th><th>ML-формулировка</th></tr><tr><td>«Хотим меньше жалоб на модерацию»</td><td>Бинарная классификация токсичности + порог по recall</td></tr><tr><td>«Увеличить средний чек»</td><td>Ranking / recommendation, метрика — revenue per session</td></tr></table><p>Совет: всегда фиксируйте постановку письменно (design doc) до того, как начнёте писать код — это экономит недели переделок.</p>",
+      "links": [
+        {
+          "title": "Google Problem Framing",
+          "url": "https://developers.google.com/machine-learning/problem-framing"
+        },
+        {
+          "title": "Made With ML — Design",
+          "url": "https://madewithml.com/courses/mlops/design/"
+        },
+        {
+          "title": "scikit-learn: Choosing the right estimator",
+          "url": "https://scikit-learn.org/stable/machine_learning_map.html"
+        }
+      ]
+    },
+    {
+      "title": "Сбор и разметка данных",
+      "level": "🟢 Junior",
+      "explanation": "<p>Данные — самое дорогое и недооценённое звено пайплайна. Источники: логи продакшена, сторонние API, краудсорс-разметка (Toloka, MTurk), синтетика через LLM.</p><ul><li><b>Разметка</b>: всегда считайте inter-annotator agreement (Cohen's kappa) — если разметчики не согласны друг с другом, модель тоже не сможет.</li><li><b>Активное обучение</b> — размечайте сначала примеры, где модель сомневается больше всего, экономит бюджет разметки в разы.</li><li><b>Утечки (data leakage)</b> — самая частая продакшн-ошибка: в train попадают признаки, которых не будет доступно в момент инференса (например, таргет, посчитанный по будущим данным).</li></ul><pre><code>from sklearn.model_selection import train_test_split\n# Плохо: случайное разбиение временных данных -> leakage\nX_train, X_test = train_test_split(df, test_size=0.2)\n\n# Хорошо: разбиение по времени\ntrain = df[df.date < '2026-01-01']\ntest = df[df.date >= '2026-01-01']</code></pre><p>Совет из продакшена: заведите data contract — схему с типами и допустимыми диапазонами полей, и валидируйте её в CI (Great Expectations, Pandera). Иначе однажды апстрим поменяет формат даты, и модель молча начнёт деградировать.</p>",
+      "links": [
+        {
+          "title": "Cohen's kappa — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Cohen%27s_kappa"
+        },
+        {
+          "title": "Great Expectations Docs",
+          "url": "https://docs.greatexpectations.io/"
+        },
+        {
+          "title": "pandas documentation",
+          "url": "https://pandas.pydata.org/docs/"
+        },
+        {
+          "title": "Data Leakage — scikit-learn",
+          "url": "https://scikit-learn.org/stable/common_pitfalls.html#data-leakage"
+        }
+      ]
+    },
+    {
+      "title": "Выбор модели и построение baseline",
+      "level": "🟢 Junior",
+      "explanation": "<p>Золотое правило: baseline должен быть готов за день, а не за неделю. Порядок эскалации сложности:</p><ul><li>Эвристика/правило (если возможно) — часто уже даёт 70% качества.</li><li>Линейная модель / логрег — быстрая, интерпретируемая, хороший sanity-check.</li><li>Градиентный бустинг (LightGBM/XGBoost/CatBoost) — рабочая лошадка для табличных данных.</li><li>Нейросети/трансформеры — только если есть доказанный прирост, оправдывающий сложность инфраструктуры.</li></ul><pre><code>import lightgbm as lgb\nfrom sklearn.metrics import roc_auc_score\n\nmodel = lgb.LGBMClassifier(n_estimators=200, learning_rate=0.05)\nmodel.fit(X_train, y_train)\nprint(roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]))</code></pre><p>Типичная ошибка джуна — сразу пробовать самую «модную» архитектуру без baseline, из-за чего непонятно, окупает ли сложность прирост метрики. На собеседовании всегда явно проговаривайте: «сначала baseline X, потом сравниваем с Y» — это сигнал зрелости.</p>",
+      "links": [
+        {
+          "title": "LightGBM Documentation",
+          "url": "https://lightgbm.readthedocs.io/"
+        },
+        {
+          "title": "XGBoost Documentation",
+          "url": "https://xgboost.readthedocs.io/"
+        },
+        {
+          "title": "scikit-learn Linear Models",
+          "url": "https://scikit-learn.org/stable/modules/linear_model.html"
+        }
+      ]
+    },
+    {
+      "title": "Проектирование ML-пайплайна (feature store, training, serving)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Продакшн ML-система — это не одна модель, а конвейер компонентов:</p><ul><li><b>Feature store</b> (Feast, Tecton) — единый источник признаков для train и inference, устраняет training/serving skew.</li><li><b>Training pipeline</b> — оркестрируется Airflow/Kubeflow/Dagster, версионируется через DVC/MLflow.</li><li><b>Model registry</b> — хранит версии моделей с метаданными и метриками (MLflow Model Registry).</li><li><b>Serving</b> — batch (для рекомендаций раз в сутки) vs online (REST/gRPC с латентностью &lt;100мс).</li></ul><pre><code># Пример простого serving-контракта (FastAPI)\nfrom fastapi import FastAPI\nimport joblib\n\napp = FastAPI()\nmodel = joblib.load(\"model_v3.pkl\")\n\n@app.post(\"/predict\")\ndef predict(features: dict):\n    x = preprocess(features)\n    return {\"score\": float(model.predict_proba([x])[0][1])}</code></pre><p>Ключевая продакшн-проблема — training/serving skew: признаки считаются по-разному в оффлайне (Spark/Pandas) и в онлайне (Java/Go сервис). Решение — единый feature store или генерация признаков одним и тем же кодом в обоих режимах.</p>",
+      "links": [
+        {
+          "title": "Feast Feature Store Docs",
+          "url": "https://docs.feast.dev/"
+        },
+        {
+          "title": "MLflow Documentation",
+          "url": "https://mlflow.org/docs/latest/index.html"
+        },
+        {
+          "title": "Apache Airflow Docs",
+          "url": "https://airflow.apache.org/docs/"
+        },
+        {
+          "title": "FastAPI Documentation",
+          "url": "https://fastapi.tiangolo.com/"
+        }
+      ]
+    },
+    {
+      "title": "Кейс: рекомендательная система",
+      "level": "🟡 Middle",
+      "explanation": "<p>Классический дизайн: двухступенчатая архитектура retrieval → ranking.</p><ul><li><b>Candidate generation</b>: из миллионов айтемов быстро отбираем сотни кандидатов — collaborative filtering, ANN-поиск по эмбеддингам (FAISS, ScaNN).</li><li><b>Ranking</b>: точная модель (GBDT или нейросеть) ранжирует кандидатов по вероятности клика/покупки, используя богатые признаки (user history, context, item features).</li><li><b>Re-ranking</b>: диверсификация, бизнес-правила (не показывать одну категорию 5 раз подряд), fairness.</li></ul><pre><code># Приближённый поиск ближайших соседей\nimport faiss\nindex = faiss.IndexFlatIP(embedding_dim)\nindex.add(item_embeddings)\nscores, ids = index.search(user_embedding.reshape(1, -1), k=200)</code></pre><p>Метрики: offline — NDCG@k, Recall@k; online — CTR, conversion, watch time. Частая ловушка — оптимизация только под CTR приводит к кликбейту; нужен баланс с долгосрочным retention. На собесе стоит упомянуть cold start (новые пользователи/айтемы) и как его решают — контентные признаки, popularity fallback.</p>",
+      "links": [
+        {
+          "title": "FAISS Documentation",
+          "url": "https://faiss.ai/"
+        },
+        {
+          "title": "Deep Learning Recommendation Systems — Google",
+          "url": "https://developers.google.com/machine-learning/recommendation"
+        },
+        {
+          "title": "Recommender Systems Handbook (arXiv survey)",
+          "url": "https://arxiv.org/abs/2109.12613"
+        }
+      ]
+    },
+    {
+      "title": "Кейс: система поиска (search)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Поисковая система тоже строится по принципу retrieval + ranking, но с акцентом на релевантность запросу:</p><ul><li><b>Lexical retrieval</b> — BM25 (Elasticsearch/OpenSearch) для точного совпадения ключевых слов.</li><li><b>Semantic retrieval</b> — dense embeddings (bi-encoder) + ANN-индекс для смысловой близости, особенно важно при синонимах и опечатках.</li><li><b>Hybrid</b> — комбинация lexical + semantic score (RRF — Reciprocal Rank Fusion) часто побеждает каждый метод по отдельности.</li><li><b>Re-ranking</b> — cross-encoder (точнее, но дороже) на топ-100 кандидатах.</li></ul><pre><code># Reciprocal Rank Fusion, k=60\ndef rrf(rank_lists, k=60):\n    scores = {}\n    for ranks in rank_lists:\n        for pos, doc_id in enumerate(ranks):\n            scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + pos + 1)\n    return sorted(scores, key=scores.get, reverse=True)</code></pre><p>Метрики: MRR, NDCG, Recall@k. Продакшн-совет: логируйте запросы без кликов (zero-click queries) — это золотая жила для улучшения релевантности и обнаружения дыр в индексе.</p>",
+      "links": [
+        {
+          "title": "OpenSearch BM25 docs",
+          "url": "https://opensearch.org/docs/latest/search-plugins/searching-data/bm25/"
+        },
+        {
+          "title": "Sentence-Transformers (bi-encoders)",
+          "url": "https://www.sbert.net/"
+        },
+        {
+          "title": "Reciprocal Rank Fusion paper",
+          "url": "https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf"
+        }
+      ]
+    },
+    {
+      "title": "Кейс: антифрод-система",
+      "level": "🔴 Senior",
+      "explanation": "<p>Антифрод — задача с экстремальным дисбалансом классов (0.1% мошенничества) и требованием низкой латентности (десятки миллисекунд на транзакцию).</p><ul><li><b>Дисбаланс</b>: не downsampling вслепую — лучше калиброванные модели (isotonic regression) + правильный выбор метрики (PR-AUC, а не ROC-AUC, которая обманчиво хороша при дисбалансе).</li><li><b>Real-time признаки</b>: скользящие агрегаты (кол-во транзакций за последние 5 минут) считаются через Kafka + Flink/Redis, а не через batch-джобы.</li><li><b>Adversarial adaptation</b>: мошенники подстраиваются под модель — нужен постоянный переобучение и мониторинг drift, а не «обучили один раз и забыли».</li><li><b>Многоуровневая защита</b>: rule-engine (жёсткие правила) + ML-скор + graph-анализ связей аккаунтов.</li></ul><pre><code># PR-AUC вместо ROC-AUC при сильном дисбалансе\nfrom sklearn.metrics import average_precision_score\npr_auc = average_precision_score(y_true, y_scores)</code></pre><p>Ключевой trade-off: false positive (заблокировали честного клиента) стоит бизнесу репутации, false negative — прямых денег. Порог решения обычно настраивают под cost-matrix, а не под 0.5 по умолчанию.</p>",
+      "links": [
+        {
+          "title": "Precision-Recall vs ROC — scikit-learn",
+          "url": "https://scikit-learn.org/stable/auto_examples/model_selection/plot_precision_recall.html"
+        },
+        {
+          "title": "Apache Flink Documentation",
+          "url": "https://nightlies.apache.org/flink/flink-docs-stable/"
+        },
+        {
+          "title": "Imbalanced-learn Documentation",
+          "url": "https://imbalanced-learn.org/stable/"
+        }
+      ]
+    },
+    {
+      "title": "Кейс: чат-бот с RAG",
+      "level": "🔴 Senior",
+      "explanation": "<p>RAG (Retrieval-Augmented Generation) — стандартная архитектура для чат-ботов над корпоративными знаниями, снижающая галлюцинации LLM.</p><ul><li><b>Индексация</b>: документы режутся на чанки (обычно 200–500 токенов с overlap), кодируются в эмбеддинги (bge, OpenAI ada), складываются в векторную БД (Qdrant, Pinecone, pgvector).</li><li><b>Retrieval</b>: hybrid search (BM25 + dense), top-k чанков подаются в промпт.</li><li><b>Generation</b>: LLM генерирует ответ, опираясь только на найденный контекст; важно явно инструктировать «отвечай только на основе контекста, если ответа нет — скажи что не знаешь».</li><li><b>Evaluation</b>: RAGAS-метрики — faithfulness (не выдумал ли модель факты), answer relevance, context precision/recall.</li></ul><pre><code>chunks = retriever.search(query, k=5)\nprompt = f\"\"\"Ответь на вопрос, используя только контекст ниже.\nКонтекст: {chunks}\nВопрос: {query}\"\"\"\nanswer = llm.generate(prompt)</code></pre><p>Продакшн-грабли: слишком большой chunk_size размывает релевантность, слишком маленький — теряет контекст. Всегда добавляйте цитирование источников в ответе — это резко повышает доверие пользователей и упрощает дебаг галлюцинаций.</p>",
+      "links": [
+        {
+          "title": "Anthropic Docs — Embeddings",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/embeddings"
+        },
+        {
+          "title": "Hugging Face — RAG",
+          "url": "https://huggingface.co/docs/transformers/model_doc/rag"
+        },
+        {
+          "title": "RAGAS Documentation",
+          "url": "https://docs.ragas.io/"
+        },
+        {
+          "title": "Qdrant Documentation",
+          "url": "https://qdrant.tech/documentation/"
+        }
+      ]
+    },
+    {
+      "title": "Масштабирование и latency-оптимизация",
+      "level": "🔴 Senior",
+      "explanation": "<p>Когда система выходит за пределы одного сервера, встают вопросы throughput и latency budget.</p><ul><li><b>Батчинг запросов</b> на GPU (dynamic batching в Triton Inference Server) резко повышает throughput ценой небольшой задержки.</li><li><b>Кэширование</b> частых запросов (Redis) — особенно для рекомендаций/поиска с повторяющимися паттернами.</li><li><b>Квантизация и дистилляция</b> моделей (INT8, ONNX Runtime, distilled студент-модели) снижают latency в 2–5 раз почти без потери качества.</li><li><b>Горизонтальное масштабирование</b>: stateless сервисы за балансировщиком, автоскейлинг по очереди/CPU.</li></ul><pre><code># Квантизация модели через ONNX Runtime\nfrom onnxruntime.quantization import quantize_dynamic, QuantType\nquantize_dynamic(\"model.onnx\", \"model_int8.onnx\", weight_type=QuantType.QInt8)</code></pre><p>Правило продакшена: измеряйте p99 latency, а не среднюю — именно хвост распределения убивает пользовательский опыт. Частая ошибка — оптимизировать модель, забыв, что 80% latency уходит на сериализацию/сеть, а не на инференс.</p>",
+      "links": [
+        {
+          "title": "NVIDIA Triton Inference Server Docs",
+          "url": "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html"
+        },
+        {
+          "title": "ONNX Runtime Documentation",
+          "url": "https://onnxruntime.ai/docs/"
+        },
+        {
+          "title": "Redis Documentation",
+          "url": "https://redis.io/docs/latest/"
+        }
+      ]
+    },
+    {
+      "title": "Cost-оптимизация ML-систем",
+      "level": "🟡 Middle",
+      "explanation": "<p>ML-инфраструктура может стоить дороже, чем весь остальной бэкенд, если не следить за расходами.</p><ul><li><b>Spot-инстансы</b> для обучения (не для serving) — экономия до 70%.</li><li><b>Right-sizing</b>: не держите GPU A100 под задачу, которая работает на CPU в 3 раза дешевле.</li><li><b>Autoscaling to zero</b> для редко используемых сервисов (serverless inference — SageMaker Serverless, Cloud Run).</li><li><b>Оптимизация токенов</b> при работе с LLM API: кэширование промптов, укорачивание системных промптов, батчинг запросов.</li></ul><table><tr><th>Решение</th><th>Экономия</th></tr><tr><td>Квантизация модели</td><td>2-4x меньше памяти/latency</td></tr><tr><td>Кэш ответов LLM</td><td>до 90% на повторяющихся запросах</td></tr><tr><td>Spot-инстансы для train</td><td>60-70% стоимости compute</td></tr></table><p>Совет: заведите дашборд cost-per-prediction — это метрика, которую любят финансовые директора, и она заставляет инженеров думать о деньгах, а не только о метриках качества.</p>",
+      "links": [
+        {
+          "title": "AWS SageMaker Serverless Inference",
+          "url": "https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints.html"
+        },
+        {
+          "title": "Google Cloud Run Docs",
+          "url": "https://cloud.google.com/run/docs"
+        },
+        {
+          "title": "Anthropic — Prompt Caching",
+          "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"
+        }
+      ]
+    },
+    {
+      "title": "Этика, приватность и safety в ML",
+      "level": "🟡 Middle",
+      "explanation": "<p>Продакшн ML-система обязана учитывать не только качество, но и последствия ошибок для людей.</p><ul><li><b>Приватность</b>: PII должен быть анонимизирован/псевдонимизирован до попадания в фичи; помните про GDPR/152-ФЗ — право на удаление данных должно распространяться и на обученные модели.</li><li><b>Fairness</b>: проверяйте метрики по подгруппам (пол, возраст, регион) — модель может быть точной в среднем, но дискриминировать меньшинство.</li><li><b>Explainability</b>: для чувствительных решений (кредитный скоринг, модерация) регуляторы часто требуют объяснимость — SHAP/LIME или изначально интерпретируемые модели.</li><li><b>Safety для LLM</b>: guardrails против prompt injection, фильтрация токсичного контента, red-teaming перед релизом.</li></ul><pre><code>import shap\nexplainer = shap.TreeExplainer(model)\nshap_values = explainer.shap_values(X_sample)\nshap.summary_plot(shap_values, X_sample)</code></pre><p>Реальный кейс: модель скоринга кредитов, обученная на исторических данных, унаследовала дискриминацию прошлого — proxy-признаки (район проживания) коррелировали с расой. Всегда аудитируйте признаки на скрытые прокси перед деплоем.</p>",
+      "links": [
+        {
+          "title": "SHAP Documentation",
+          "url": "https://shap.readthedocs.io/"
+        },
+        {
+          "title": "GDPR overview",
+          "url": "https://gdpr-info.eu/"
+        },
+        {
+          "title": "Google Responsible AI Practices",
+          "url": "https://ai.google/responsibility/responsible-ai-practices/"
+        }
+      ]
+    },
+    {
+      "title": "Портфолио и pet-проекты для ML-инженера",
+      "level": "🟢 Junior",
+      "explanation": "<p>Работодателей интересует не набор Kaggle-медалей, а способность довести проект до продакшн-качества.</p><ul><li>Выберите 1-2 проекта, которые закрывают полный цикл: сбор данных → обучение → деплой (API/Docker) → мониторинг, а не просто ноутбук с метрикой.</li><li>Хороший pet-проект: RAG-бот над своими документами, детектор аномалий на реальных логах, рекомендательная система на open-датасете (MovieLens) с A/B-симуляцией.</li><li>Выложите на GitHub с внятным README: постановка задачи, архитектура, метрики, ограничения — это то, что реально читают.</li><li>Пишите технические посты (Habr, Medium) о нетривиальных решениях — это работает как публичное портфолио сильнее, чем список репозиториев.</li></ul><pre><code># Структура репозитория, которая нравится рекрутерам\nproject/\n├── data/           # or DVC pointer\n├── src/\n│   ├── train.py\n│   ├── serve.py\n├── tests/\n├── Dockerfile\n├── README.md       # постановка задачи + результаты + graphs\n</code></pre><p>Ошибка большинства кандидатов — 10 недоделанных ноутбуков вместо одного завершённого end-to-end проекта. Качество и глубина одного проекта побеждают количество.</p>",
+      "links": [
+        {
+          "title": "Made With ML — MLOps Course",
+          "url": "https://madewithml.com/"
+        },
+        {
+          "title": "MLOps Community Resources",
+          "url": "https://mlops.community/"
+        },
+        {
+          "title": "GitHub Docs — About READMEs",
+          "url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes"
+        }
+      ]
+    },
+    {
+      "title": "Собеседования ML-инженера: типы и подготовка",
+      "level": "🟡 Middle",
+      "explanation": "<p>Собеседование на ML-инженера обычно состоит из 4-5 блоков:</p><ul><li><b>Coding</b> — алгоритмы + иногда ML-specific код (реализовать k-means с нуля).</li><li><b>ML fundamentals</b> — bias/variance, регуляризация, метрики, как работает backprop, разница между bagging и boosting.</li><li><b>ML System Design</b> — спроектировать систему end-to-end (см. отдельную тему).</li><li><b>Behavioral</b> — рассказ о прошлых проектах по STAR-методу (Situation-Task-Action-Result).</li><li><b>Take-home/case</b> — иногда дают датасет и просят построить решение за несколько дней.</li></ul><pre><code># Пример вопроса на fundamentals: реализовать метрику вручную\ndef precision_recall(y_true, y_pred):\n    tp = sum((yt == 1 and yp == 1) for yt, yp in zip(y_true, y_pred))\n    fp = sum((yt == 0 and yp == 1) for yt, yp in zip(y_true, y_pred))\n    fn = sum((yt == 1 and yp == 0) for yt, yp in zip(y_true, y_pred))\n    precision = tp / (tp + fp) if (tp + fp) else 0\n    recall = tp / (tp + fn) if (tp + fn) else 0\n    return precision, recall</code></pre><p>Совет: готовьте 3-4 истории по STAR заранее — про провал, про конфликт в команде, про сложное техническое решение. Импровизация на behavioral-части — частая причина отказов даже у сильных технически кандидатов.</p>",
+      "links": [
+        {
+          "title": "fast.ai курс",
+          "url": "https://course.fast.ai/"
+        },
+        {
+          "title": "DeepLearning.AI курсы",
+          "url": "https://www.deeplearning.ai/"
+        },
+        {
+          "title": "Chip Huyen — ML Interviews Book",
+          "url": "https://huyenchip.com/ml-interviews-book/"
+        }
+      ]
+    },
+    {
+      "title": "Роадмап роста Junior → Middle → Senior ML-инженера",
+      "level": "🔴 Senior",
+      "explanation": "<p>Карьерный рост в ML измеряется не годами, а масштабом решаемых проблем и уровнем неопределённости, с которым вы работаете самостоятельно.</p><table><tr><th>Уровень</th><th>Фокус</th></tr><tr><td>Junior</td><td>Реализация по чёткому ТЗ: обучить модель по заданным метрикам, написать тесты, следовать код-ревью</td></tr><tr><td>Middle</td><td>Самостоятельная постановка задачи, выбор архитектуры, ответственность за весь пайплайн одного сервиса</td></tr><tr><td>Senior</td><td>Проектирование систем на несколько сервисов, менторство, trade-off решения с бизнес-последствиями, влияние на roadmap команды</td></tr></table><ul><li>Junior → Middle: научитесь доводить проект до продакшена целиком, а не только «модель обучилась в ноутбуке».</li><li>Middle → Senior: развивайте system thinking — умение оценить стоимость/риски решения до его реализации, а не после.</li><li>На всех уровнях: непрерывно читайте статьи (arXiv, папиры конференций NeurIPS/ICML) и внедряйте 1-2 идеи в квартал — стагнация в ML особенно заметна из-за скорости индустрии.</li></ul><p>Практический совет: попросите тимлида явно сформулировать, что отделяет вас от следующего грейда — конкретные, измеримые критерии работают лучше расплывчатого «нужно больше опыта».</p>",
+      "links": [
+        {
+          "title": "Chip Huyen — ML Interviews Book",
+          "url": "https://huyenchip.com/ml-interviews-book/"
+        },
+        {
+          "title": "Google's Rules of ML",
+          "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+        },
+        {
+          "title": "arXiv.org — свежие статьи по ML",
+          "url": "https://arxiv.org/list/cs.LG/recent"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "С чего стоит начинать ML System Design интервью?",
+      "options": [
+        "Сразу с выбора архитектуры нейросети",
+        "С уточнения требований, метрик и ограничений (clarify)",
+        "С написания кода обучения модели",
+        "С обсуждения зарплаты"
+      ],
+      "answer": 1,
+      "explain": "Без уточнения требований (пользователь, метрика, latency, объём данных) любое архитектурное решение будет угадыванием."
+    },
+    {
+      "q": "Что такое data leakage в контексте обучения модели?",
+      "options": [
+        "Утечка данных пользователей в интернет",
+        "Попадание в обучающую выборку информации, недоступной в момент реального инференса",
+        "Потеря данных при передаче по сети",
+        "Слишком маленький размер датасета"
+      ],
+      "answer": 1,
+      "explain": "Классический пример — таргет или future-признаки просачиваются в трейн, из-за чего offline-метрики завышены, а в продакшене модель проседает."
+    },
+    {
+      "q": "Зачем нужен baseline перед сложной моделью?",
+      "options": [
+        "Чтобы потратить больше времени на проект",
+        "Чтобы иметь точку сравнения и понять, оправдана ли сложность",
+        "Baseline не нужен, если есть трансформер",
+        "Чтобы удовлетворить требования заказчика по срокам"
+      ],
+      "answer": 1,
+      "explain": "Baseline даёт быструю точку отсчёта и sanity-check: если сложная модель не бьёт baseline существенно, её усложнение не оправдано."
+    },
+    {
+      "q": "Что решает feature store в ML-пайплайне?",
+      "options": [
+        "Ускоряет обучение GPU в 10 раз",
+        "Устраняет training/serving skew, обеспечивая единый источник признаков",
+        "Заменяет модель регрессии",
+        "Хранит только текстовые данные"
+      ],
+      "answer": 1,
+      "explain": "Feature store гарантирует, что признаки считаются одинаково и в оффлайн-обучении, и в онлайн-инференсе."
+    },
+    {
+      "q": "Почему для антифрод-задач ROC-AUC может вводить в заблуждение?",
+      "options": [
+        "ROC-AUC вообще нельзя считать для классификации",
+        "При сильном дисбалансе классов ROC-AUC остаётся высоким даже при плохом качестве на положительном классе, лучше PR-AUC",
+        "ROC-AUC требует GPU для расчёта",
+        "ROC-AUC применим только к регрессии"
+      ],
+      "answer": 1,
+      "explain": "При сильном дисбалансе (0.1% мошенничества) PR-AUC честнее отражает качество модели на редком положительном классе."
+    },
+    {
+      "q": "Какова роль retrieval-этапа в RAG-архитектуре чат-бота?",
+      "options": [
+        "Генерировать финальный текст ответа",
+        "Находить релевантные фрагменты контекста для передачи в промпт LLM",
+        "Обучать LLM с нуля",
+        "Заменять векторную базу данных на SQL"
+      ],
+      "answer": 1,
+      "explain": "Retrieval находит топ-k релевантных чанков документов, которые затем передаются в промпт для генерации ответа, снижая галлюцинации."
+    },
+    {
+      "q": "Почему для latency важнее смотреть на p99, а не на среднее значение?",
+      "options": [
+        "Среднее значение вообще нельзя измерить",
+        "p99 отражает худший опыт значимой доли пользователей, который среднее скрывает",
+        "p99 всегда меньше среднего",
+        "Это требование только для мобильных приложений"
+      ],
+      "answer": 1,
+      "explain": "Средняя latency может быть низкой, но 1% медленных запросов (p99) реально портит пользовательский опыт и часто указывает на проблему инфраструктуры."
+    },
+    {
+      "q": "Какой подход к cost-оптимизации ML-инфраструктуры корректен?",
+      "options": [
+        "Всегда использовать самые мощные GPU для любых задач",
+        "Использовать spot-инстансы для обучения и right-sizing ресурсов под задачу",
+        "Отказаться от мониторинга затрат",
+        "Хранить все модели без квантизации для лучшей точности"
+      ],
+      "answer": 1,
+      "explain": "Spot-инстансы для обучения и подбор ресурсов под реальную нагрузку — стандартные практики снижения расходов без потери качества."
+    },
+    {
+      "q": "Что важно проверить при аудите ML-модели на этичность?",
+      "options": [
+        "Только общую точность модели",
+        "Наличие скрытых прокси-признаков, коррелирующих с защищёнными атрибутами (раса, пол)",
+        "Скорость инференса модели",
+        "Размер обучающего датасета в гигабайтах"
+      ],
+      "answer": 1,
+      "explain": "Модель может быть точной в среднем, но дискриминировать по прокси-признакам (например, район проживания), унаследованным от исторических данных."
+    },
+    {
+      "q": "Что отличает Senior ML-инженера от Middle согласно роадмапу роста?",
+      "options": [
+        "Только больший стаж работы",
+        "Способность проектировать системы с учётом бизнес-trade-off'ов и влиять на roadmap команды",
+        "Умение писать больше кода в день",
+        "Знание большего числа языков программирования"
+      ],
+      "answer": 1,
+      "explain": "Переход на Senior измеряется масштабом ответственности и уровнем неопределённости, с которым инженер справляется самостоятельно, а не только техническими навыками."
+    }
+  ]
+}

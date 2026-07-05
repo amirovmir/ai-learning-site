@@ -1,0 +1,371 @@
+{
+  "phase": "Phase 4 — LLM & GenAI",
+  "section": "📚 RAG и векторные базы",
+  "topics": [
+    {
+      "title": "Зачем нужен RAG",
+      "level": "🟢 Junior",
+      "explanation": "<p>RAG (Retrieval-Augmented Generation) решает три боли обычной LLM: <b>устаревшие знания</b>, <b>отсутствие приватных данных</b> и <b>галлюцинации</b>. Вместо дообучения модели мы на лету подмешиваем в контекст релевантные документы.</p><ul><li>LLM не знает про ваши внутренние регламенты — RAG подгружает их из базы знаний</li><li>Дешевле и быстрее, чем fine-tuning</li><li>Можно точечно обновлять источники без переобучения</li></ul><p>Базовый пайплайн:</p><pre><code>query = \"Как оформить отпуск?\"\ndocs = retriever.search(query, k=5)\ncontext = \"\\n\".join(d.text for d in docs)\nprompt = f\"Контекст:\\n{context}\\n\\nВопрос: {query}\"\nanswer = llm.generate(prompt)\n</code></pre><p><b>Типичная ошибка</b>: думать, что RAG сам по себе устраняет галлюцинации. Если ретривер притащил нерелевантный документ, модель всё равно может выдумать ответ на его основе — нужен контроль качества поиска.</p>",
+      "links": [
+        {
+          "title": "RAG - Hugging Face docs",
+          "url": "https://huggingface.co/docs/transformers/model_doc/rag"
+        },
+        {
+          "title": "Retrieval-Augmented Generation paper (arXiv)",
+          "url": "https://arxiv.org/abs/2005.11401"
+        },
+        {
+          "title": "LangChain RAG tutorial",
+          "url": "https://python.langchain.com/docs/tutorials/rag/"
+        }
+      ]
+    },
+    {
+      "title": "Архитектура RAG-пайплайна",
+      "level": "🟢 Junior",
+      "explanation": "<p>Классический RAG состоит из этапов: <b>индексация</b> (offline) и <b>запрос</b> (online).</p><table><tr><th>Этап</th><th>Что происходит</th></tr><tr><td>Ingest</td><td>Загрузка документов, парсинг PDF/HTML</td></tr><tr><td>Chunking</td><td>Разбиение на куски</td></tr><tr><td>Embedding</td><td>Векторизация чанков</td></tr><tr><td>Indexing</td><td>Запись в векторную БД</td></tr><tr><td>Retrieval</td><td>Поиск top-k по запросу</td></tr><tr><td>Generation</td><td>LLM формирует ответ с контекстом</td></tr></table><p>На практике 80% проблем с качеством RAG лежат в chunking и retrieval, а не в самой генерации. Начинающие инженеры сразу лезут менять промпт, хотя проблема в том, что нужный документ вообще не попал в top-k.</p><p>Совет: логируйте, какие чанки были найдены для каждого запроса — это единственный способ быстро диагностировать проблему.</p>",
+      "links": [
+        {
+          "title": "LangChain RAG concepts",
+          "url": "https://python.langchain.com/docs/concepts/rag/"
+        },
+        {
+          "title": "LlamaIndex documentation",
+          "url": "https://docs.llamaindex.ai/en/stable/"
+        }
+      ]
+    },
+    {
+      "title": "Chunking стратегии",
+      "level": "🟢 Junior",
+      "explanation": "<p>Chunking — разбиение документов на куски для эмбеддинга. От размера и стратегии напрямую зависит качество поиска.</p><ul><li><b>Fixed-size</b> — просто режем по N токенов, часто с overlap</li><li><b>Recursive character splitting</b> — режем по абзацам/предложениям, сохраняя структуру</li><li><b>Semantic chunking</b> — режем по смысловым границам (embedding similarity)</li><li><b>Document-aware</b> — учитываем markdown-заголовки, таблицы, код</li></ul><pre><code>from langchain.text_splitter import RecursiveCharacterTextSplitter\n\nsplitter = RecursiveCharacterTextSplitter(\n    chunk_size=500,\n    chunk_overlap=50,\n    separators=[\"\\n\\n\", \"\\n\", \". \", \" \"]\n)\nchunks = splitter.split_text(document)\n</code></pre><p><b>Типичные ошибки</b>: слишком крупные чанки (теряется точность retrieval) или слишком мелкие (теряется контекст). Для FAQ — маленькие чанки (1 вопрос-ответ), для технической документации — 300-800 токенов с overlap 10-15%.</p>",
+      "links": [
+        {
+          "title": "LangChain Text Splitters",
+          "url": "https://python.langchain.com/docs/concepts/text_splitters/"
+        },
+        {
+          "title": "Pinecone: Chunking Strategies",
+          "url": "https://www.pinecone.io/learn/chunking-strategies/"
+        }
+      ]
+    },
+    {
+      "title": "Эмбеддинги для поиска",
+      "level": "🟢 Junior",
+      "explanation": "<p>Эмбеддинг — вектор фиксированной размерности, отражающий семантику текста. Похожие по смыслу тексты имеют близкие векторы (по косинусному расстоянию).</p><pre><code>from sentence_transformers import SentenceTransformer\n\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\nvec = model.encode(\"Как оформить отпуск?\")\nprint(vec.shape)  # (384,)\n</code></pre><p>Популярные модели: OpenAI <code>text-embedding-3-small/large</code>, <code>bge-m3</code>, <code>e5-large</code>, для русского — <code>multilingual-e5-large</code> или <code>ru-en-RoSBERTa</code>.</p><ul><li>Используйте один и тот же embedding-инструмент для индексации и запроса</li><li>Проверяйте, поддерживает ли модель нужный язык (многие английские модели плохо работают с русским)</li><li>E5-модели требуют префиксов <code>query:</code> / <code>passage:</code> — забыть про них частая ошибка</li></ul><p>Метрика близости обычно cosine similarity, реже dot product или L2.</p>",
+      "links": [
+        {
+          "title": "Sentence-Transformers docs",
+          "url": "https://www.sbert.net/"
+        },
+        {
+          "title": "Hugging Face: MTEB Leaderboard",
+          "url": "https://huggingface.co/spaces/mteb/leaderboard"
+        },
+        {
+          "title": "OpenAI Embeddings guide",
+          "url": "https://platform.openai.com/docs/guides/embeddings"
+        }
+      ]
+    },
+    {
+      "title": "Векторные базы данных: обзор",
+      "level": "🟡 Middle",
+      "explanation": "<p>Векторная БД хранит эмбеддинги и позволяет быстро искать ближайшие соседи (ANN — Approximate Nearest Neighbors) без полного перебора.</p><table><tr><th>БД</th><th>Особенности</th></tr><tr><td>FAISS</td><td>Библиотека Meta, in-memory, нет персистентности из коробки</td></tr><tr><td>Qdrant</td><td>Rust, фильтры по metadata, легко деплоится в Docker</td></tr><tr><td>pgvector</td><td>Расширение Postgres — не нужна отдельная БД</td></tr><tr><td>Milvus</td><td>Промышленный масштаб, шардирование</td></tr><tr><td>Weaviate</td><td>Встроенный hybrid search, GraphQL API</td></tr></table><p>Для старта в проде часто выбирают <b>pgvector</b>, если уже есть Postgres — меньше инфраструктуры. Для больших объёмов (>10M векторов) — Qdrant/Milvus с ANN-индексами (HNSW, IVF).</p><p>Совет: не храните в векторной БД только вектор — всегда сохраняйте metadata (source, chunk_id, дату) для фильтрации и трассировки ответов.</p>",
+      "links": [
+        {
+          "title": "Qdrant documentation",
+          "url": "https://qdrant.tech/documentation/"
+        },
+        {
+          "title": "pgvector GitHub",
+          "url": "https://github.com/pgvector/pgvector"
+        },
+        {
+          "title": "Milvus documentation",
+          "url": "https://milvus.io/docs"
+        },
+        {
+          "title": "Weaviate documentation",
+          "url": "https://weaviate.io/developers/weaviate"
+        }
+      ]
+    },
+    {
+      "title": "FAISS на практике",
+      "level": "🟡 Middle",
+      "explanation": "<p>FAISS — быстрая библиотека для ANN-поиска, хороша для прототипов и локальных задач.</p><pre><code>import faiss\nimport numpy as np\n\ndim = 384\nindex = faiss.IndexFlatIP(dim)  # inner product = cosine, если нормализовать\n\nvectors = np.random.rand(1000, dim).astype('float32')\nfaiss.normalize_L2(vectors)\nindex.add(vectors)\n\nquery = np.random.rand(1, dim).astype('float32')\nfaiss.normalize_L2(query)\nD, I = index.search(query, k=5)\nprint(I)  # индексы ближайших чанков\n</code></pre><p>Для больших коллекций используйте <code>IndexHNSWFlat</code> или <code>IndexIVFFlat</code> — точный <code>IndexFlatIP</code> линейно деградирует по скорости при росте N.</p><p><b>Ошибка новичков</b>: забыть нормализовать векторы при использовании inner product — тогда «косинусное сходство» превращается в бессмысленное число, зависящее от длины вектора.</p>",
+      "links": [
+        {
+          "title": "FAISS GitHub Wiki",
+          "url": "https://github.com/facebookresearch/faiss/wiki"
+        },
+        {
+          "title": "FAISS documentation",
+          "url": "https://faiss.ai/"
+        }
+      ]
+    },
+    {
+      "title": "Qdrant и pgvector в продакшене",
+      "level": "🟡 Middle",
+      "explanation": "<p>В отличие от FAISS, Qdrant и pgvector — полноценные БД с персистентностью, фильтрами и API.</p><pre><code># Qdrant client\nfrom qdrant_client import QdrantClient\nfrom qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue\n\nclient = QdrantClient(url=\"http://localhost:6333\")\nclient.upsert(collection_name=\"docs\", points=[\n    PointStruct(id=1, vector=vec, payload={\"source\": \"faq.pdf\", \"lang\": \"ru\"})\n])\n\nresults = client.search(\n    collection_name=\"docs\", query_vector=query_vec, limit=5,\n    query_filter=Filter(must=[FieldCondition(key=\"lang\", match=MatchValue(value=\"ru\"))])\n)\n</code></pre><pre><code>-- pgvector\nCREATE EXTENSION vector;\nCREATE TABLE docs (id serial, content text, embedding vector(384));\nSELECT content FROM docs ORDER BY embedding <=> '[0.1, 0.2, ...]' LIMIT 5;\n</code></pre><p>Совет: в Qdrant всегда задавайте фильтры по metadata (например, tenant_id) — это и ускоряет поиск, и предотвращает утечку данных между клиентами в multi-tenant системах.</p>",
+      "links": [
+        {
+          "title": "Qdrant Client docs",
+          "url": "https://qdrant.tech/documentation/frameworks/"
+        },
+        {
+          "title": "pgvector GitHub",
+          "url": "https://github.com/pgvector/pgvector"
+        },
+        {
+          "title": "Qdrant quickstart",
+          "url": "https://qdrant.tech/documentation/quickstart/"
+        }
+      ]
+    },
+    {
+      "title": "Semantic search vs keyword search (BM25)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Semantic search находит по смыслу, но плохо работает с точными терминами — артикулами, кодами ошибок, именами собственными. Keyword search (BM25) — наоборот.</p><table><tr><th></th><th>Semantic</th><th>BM25</th></tr><tr><td>Синонимы</td><td>+</td><td>-</td></tr><tr><td>Точные термины/ID</td><td>-</td><td>+</td></tr><tr><td>Опечатки</td><td>+/-</td><td>-</td></tr></table><pre><code>from rank_bm25 import BM25Okapi\n\ntokenized_corpus = [doc.split() for doc in corpus]\nbm25 = BM25Okapi(tokenized_corpus)\nscores = bm25.get_scores(query.split())\n</code></pre><p><b>Кейс из практики</b>: пользователь ищет «ошибка E-4021» — чистый semantic search может не найти документ, где просто написано «код E-4021», потому что эмбеддинг чисел плохо различим. BM25 находит мгновенно за счёт точного совпадения токенов.</p><p>Вывод: для продакшена почти всегда нужен гибрид, а не один метод.</p>",
+      "links": [
+        {
+          "title": "BM25 - Wikipedia (Okapi BM25)",
+          "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
+        },
+        {
+          "title": "rank_bm25 GitHub",
+          "url": "https://github.com/dorianbrown/rank_bm25"
+        }
+      ]
+    },
+    {
+      "title": "Гибридный поиск (hybrid search)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Гибридный поиск объединяет semantic и keyword результаты, обычно через <b>Reciprocal Rank Fusion (RRF)</b> или взвешенную сумму скоров.</p><pre><code>def reciprocal_rank_fusion(rankings, k=60):\n    scores = {}\n    for ranking in rankings:\n        for rank, doc_id in enumerate(ranking):\n            scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank + 1)\n    return sorted(scores, key=scores.get, reverse=True)\n\nsemantic_rank = [\"d3\", \"d1\", \"d5\"]\nbm25_rank = [\"d1\", \"d2\", \"d3\"]\nfinal = reciprocal_rank_fusion([semantic_rank, bm25_rank])\n</code></pre><p>Многие векторные БД (Qdrant, Weaviate, Elasticsearch) уже умеют hybrid search «из коробки» — не нужно писать RRF руками.</p><p><b>Совет</b>: не гонитесь за сложными весами вручную — RRF устойчив к разным масштабам скоров semantic/BM25 и обычно даёт хороший baseline без тюнинга.</p>",
+      "links": [
+        {
+          "title": "Reciprocal Rank Fusion paper",
+          "url": "https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf"
+        },
+        {
+          "title": "Qdrant Hybrid Search docs",
+          "url": "https://qdrant.tech/documentation/concepts/hybrid-queries/"
+        },
+        {
+          "title": "Weaviate Hybrid Search docs",
+          "url": "https://weaviate.io/developers/weaviate/search/hybrid"
+        }
+      ]
+    },
+    {
+      "title": "Reranking",
+      "level": "🟡 Middle",
+      "explanation": "<p>Reranking — второй проход после первичного retrieval: берём top-50 кандидатов (дешёвый bi-encoder поиск) и пересортировываем их точной cross-encoder моделью, которая смотрит на пару (запрос, документ) вместе.</p><pre><code>from sentence_transformers import CrossEncoder\n\nreranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')\npairs = [(query, doc.text) for doc in candidates]\nscores = reranker.predict(pairs)\nranked = [doc for _, doc in sorted(zip(scores, candidates), reverse=True)]\ntop_k = ranked[:5]\n</code></pre><p>Cross-encoder точнее bi-encoder, но медленнее (O(N) прогонов через модель), поэтому его применяют только к небольшому числу кандидатов после грубого retrieval.</p><p>В проде reranking часто даёт больший прирост качества, чем смена embedding-модели — это недооценённый рычаг, особенно для доменов со специфичной терминологией (юридические, медицинские тексты).</p>",
+      "links": [
+        {
+          "title": "Sentence-Transformers Cross-Encoders",
+          "url": "https://www.sbert.net/examples/applications/cross-encoder/README.html"
+        },
+        {
+          "title": "Cohere Rerank docs",
+          "url": "https://docs.cohere.com/docs/rerank-overview"
+        }
+      ]
+    },
+    {
+      "title": "Метрики качества RAG",
+      "level": "🔴 Senior",
+      "explanation": "<p>Качество RAG оценивают на двух уровнях: <b>retrieval</b> и <b>generation</b>.</p><table><tr><th>Метрика</th><th>Что измеряет</th></tr><tr><td>Recall@k</td><td>Доля запросов, где нужный документ попал в top-k</td></tr><tr><td>MRR</td><td>Позиция первого релевантного результата</td></tr><tr><td>NDCG</td><td>Ранжирование с учётом градации релевантности</td></tr><tr><td>Faithfulness</td><td>Ответ не противоречит контексту (нет галлюцинаций)</td></tr><tr><td>Answer relevance</td><td>Ответ релевантен вопросу</td></tr></table><pre><code>def recall_at_k(retrieved_ids, relevant_ids, k=5):\n    top_k = set(retrieved_ids[:k])\n    return len(top_k & set(relevant_ids)) / len(relevant_ids)\n</code></pre><p><b>Частая ошибка</b>: оценивать только конечный ответ LLM и не мерить retrieval отдельно. Если Recall@5 = 0.4, то никакой промпт-инжиниринг не спасёт генерацию — сначала чините поиск, потом промпт.</p><p>Нужен golden dataset — набор пар (запрос, релевантные документы, эталонный ответ), размеченный вручную или синтетически.</p>",
+      "links": [
+        {
+          "title": "RAGAS documentation",
+          "url": "https://docs.ragas.io/en/stable/"
+        },
+        {
+          "title": "Information retrieval evaluation - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)"
+        }
+      ]
+    },
+    {
+      "title": "Оценка RAG с помощью RAGAS",
+      "level": "🔴 Senior",
+      "explanation": "<p>RAGAS — фреймворк для автоматической оценки RAG-пайплайнов с помощью LLM-as-judge, без ручной разметки эталонных ответов.</p><pre><code>from ragas import evaluate\nfrom ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall\nfrom datasets import Dataset\n\ndata = Dataset.from_dict({\n    \"question\": [\"Как оформить отпуск?\"],\n    \"answer\": [\"Нужно подать заявление за 2 недели...\"],\n    \"contexts\": [[\"Отпуск оформляется через HR-портал...\"]],\n    \"ground_truth\": [\"Заявление подаётся за 14 дней через HR-портал\"]\n})\n\nresult = evaluate(data, metrics=[faithfulness, answer_relevancy, context_precision, context_recall])\nprint(result)\n</code></pre><p>Ключевые метрики: <code>faithfulness</code> (нет ли выдумок относительно контекста), <code>context_precision/recall</code> (качество ретривера), <code>answer_relevancy</code>.</p><p><b>Совет</b>: LLM-as-judge сам подвержен смещениям и стоит денег на каждый запуск eval — используйте недорогую модель-судью и фиксируйте seed/промпт судьи, чтобы результаты были воспроизводимы между релизами.</p>",
+      "links": [
+        {
+          "title": "RAGAS documentation",
+          "url": "https://docs.ragas.io/en/stable/"
+        },
+        {
+          "title": "RAGAS GitHub",
+          "url": "https://github.com/explodinggradients/ragas"
+        }
+      ]
+    },
+    {
+      "title": "Продвинутый RAG: HyDE и query expansion",
+      "level": "🔴 Senior",
+      "explanation": "<p><b>HyDE (Hypothetical Document Embeddings)</b>: вместо эмбеддинга самого вопроса, LLM сначала генерирует гипотетический ответ, и уже его эмбеддинг используется для поиска — это часто ближе по смыслу к реальным документам, чем короткий вопрос.</p><pre><code>hypothetical = llm.generate(f\"Ответь кратко на вопрос: {query}\")\nvec = embed(hypothetical)\ndocs = vector_db.search(vec, k=5)\n</code></pre><p><b>Query expansion</b>: генерируем несколько перефразировок запроса и ищем по каждой, объединяя результаты (multi-query retrieval).</p><pre><code>queries = llm.generate(f\"Сгенерируй 3 перефразировки запроса: {query}\").split(\"\\n\")\nall_docs = []\nfor q in queries:\n    all_docs += vector_db.search(embed(q), k=5)\nunique_docs = dedupe(all_docs)\n</code></pre><p>Оба метода увеличивают латентность и стоимость (дополнительный вызов LLM), поэтому применяются, когда простой семантический поиск даёт низкий recall — типично для коротких, неоднозначных или разговорных запросов.</p>",
+      "links": [
+        {
+          "title": "HyDE paper (arXiv)",
+          "url": "https://arxiv.org/abs/2212.10496"
+        },
+        {
+          "title": "LangChain Multi-Query Retriever",
+          "url": "https://python.langchain.com/docs/how_to/MultiQueryRetriever/"
+        }
+      ]
+    },
+    {
+      "title": "GraphRAG кратко",
+      "level": "🔴 Senior",
+      "explanation": "<p>GraphRAG строит граф сущностей и связей из корпуса документов (через LLM-извлечение) и использует его вместе с векторным поиском, что особенно полезно для вопросов, требующих <b>агрегации по всему корпусу</b> («какие темы обсуждались чаще всего?»), а не просто поиска одного факта.</p><ul><li>Extraction: LLM извлекает сущности и отношения из чанков</li><li>Community detection: группировка сущностей в кластеры (например, алгоритм Лейдена)</li><li>Summarization: LLM суммирует каждый кластер</li><li>Query: локальный поиск (по сущности) или глобальный (по summary кластеров)</li></ul><pre><code># Псевдокод upsert сущностей в граф\ngraph.add_edge(\"Компания X\", \"Продукт Y\", relation=\"выпускает\")\n</code></pre><p>Подход Microsoft GraphRAG значительно дороже классического RAG (много LLM-вызовов на этапе индексации) и оправдан, когда обычный chunk-based retrieval не даёт целостной картины по большим документам/базам знаний. Для точечных Q&A задач GraphRAG обычно избыточен.</p>",
+      "links": [
+        {
+          "title": "Microsoft GraphRAG",
+          "url": "https://microsoft.github.io/graphrag/"
+        },
+        {
+          "title": "GraphRAG paper (arXiv)",
+          "url": "https://arxiv.org/abs/2404.16130"
+        },
+        {
+          "title": "Leiden algorithm - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Leiden_algorithm"
+        }
+      ]
+    },
+    {
+      "title": "Типичные проблемы и отладка RAG",
+      "level": "🔴 Senior",
+      "explanation": "<p>Чек-лист диагностики, когда RAG «не работает»:</p><ul><li><b>Retrieval не находит документ</b> — проверьте chunking (слишком длинный/короткий), embedding-модель под язык, наличие нужных данных в индексе вообще</li><li><b>Найден, но не тот кусок</b> — добавьте reranking, увеличьте overlap чанков</li><li><b>LLM игнорирует контекст</b> — контекст слишком длинный/зашумлён нерелевантными чанками, модель «теряется в середине» (lost in the middle)</li><li><b>Галлюцинации несмотря на верный контекст</b> — усильте промпт («отвечай только на основе контекста, если ответа нет — скажи «не знаю»»)</li><li><b>Устаревшие данные</b> — нет пайплайна re-indexing при обновлении источников</li></ul><pre><code># Простой sanity-check retrieval отдельно от генерации\nfor q, expected_doc_id in eval_set:\n    retrieved = retriever.search(q, k=5)\n    hit = expected_doc_id in [d.id for d in retrieved]\n    print(q, hit)\n</code></pre><p>Золотое правило: логируйте retrieved-чанки и финальный промпт для каждого запроса в проде — без этого отладка превращается в гадание.</p>",
+      "links": [
+        {
+          "title": "Lost in the Middle paper (arXiv)",
+          "url": "https://arxiv.org/abs/2307.03172"
+        },
+        {
+          "title": "LangChain RAG concepts",
+          "url": "https://python.langchain.com/docs/concepts/rag/"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Какую главную проблему LLM решает RAG без дообучения модели?",
+      "options": [
+        "Устаревшие/недоступные модели знания и приватные данные",
+        "Медленную инференс-скорость",
+        "Слишком большой размер модели",
+        "Отсутствие GPU"
+      ],
+      "answer": 0,
+      "explain": "RAG подмешивает актуальные и приватные данные в контекст на лету, не требуя fine-tuning."
+    },
+    {
+      "q": "Почему слишком мелкие чанки при chunking часто вредят качеству RAG?",
+      "options": [
+        "Увеличивают стоимость embedding в 10 раз всегда",
+        "Теряется контекст, нужный для понимания смысла куска",
+        "Векторная БД не может их хранить",
+        "Semantic chunking запрещён для мелких кусков"
+      ],
+      "answer": 1,
+      "explain": "Слишком мелкий чанк может вырвать фразу из контекста, из-за чего эмбеддинг и последующий ответ теряют смысл."
+    },
+    {
+      "q": "Что нужно сделать, если используете e5-подобные embedding-модели?",
+      "options": [
+        "Добавлять префиксы query:/passage: к тексту перед эмбеддингом",
+        "Всегда использовать L2-расстояние вместо cosine",
+        "Обучать модель заново на каждом запросе",
+        "Отключить нормализацию векторов"
+      ],
+      "answer": 0,
+      "explain": "Модели семейства E5 обучены с префиксами query:/passage:, без них качество поиска заметно падает."
+    },
+    {
+      "q": "В чём главное преимущество BM25 (keyword search) перед чистым semantic search?",
+      "options": [
+        "Понимает синонимы лучше эмбеддингов",
+        "Точно находит документы по точным терминам, кодам, ID",
+        "Не требует индекса вообще",
+        "Работает только на GPU"
+      ],
+      "answer": 1,
+      "explain": "BM25 основан на точном совпадении токенов, поэтому отлично находит специфичные термины и коды, которые эмбеддинги могут 'смазать'."
+    },
+    {
+      "q": "Что делает Reciprocal Rank Fusion (RRF) в гибридном поиске?",
+      "options": [
+        "Обучает новую embedding-модель",
+        "Объединяет ранжированные списки из разных методов поиска в один итоговый рейтинг",
+        "Удаляет дубликаты документов из БД",
+        "Заменяет reranker полностью"
+      ],
+      "answer": 1,
+      "explain": "RRF комбинирует результаты нескольких ранжирований (например, semantic и BM25) по формуле суммы обратных рангов, устойчиво к разным шкалам скоров."
+    },
+    {
+      "q": "Почему reranking (cross-encoder) обычно применяют только к top-N кандидатам, а не ко всей базе?",
+      "options": [
+        "Cross-encoder дешевле bi-encoder",
+        "Cross-encoder требует пары (запрос, документ) вместе и медленнее, поэтому масштабируется хуже",
+        "Reranking запрещён на больших индексах",
+        "Cross-encoder не умеет работать с текстом"
+      ],
+      "answer": 1,
+      "explain": "Cross-encoder прогоняет пару запрос+документ через модель совместно, что точнее, но затратнее по времени — поэтому применяется лишь к небольшому числу отобранных кандидатов."
+    },
+    {
+      "q": "Что измеряет метрика Faithfulness в оценке RAG?",
+      "options": [
+        "Скорость ответа модели",
+        "Насколько сгенерированный ответ не противоречит найденному контексту (отсутствие галлюцинаций)",
+        "Количество токенов в ответе",
+        "Размер векторной БД"
+      ],
+      "answer": 1,
+      "explain": "Faithfulness проверяет, что утверждения в ответе подтверждаются контекстом, а не выдуманы моделью."
+    },
+    {
+      "q": "В чём суть подхода HyDE?",
+      "options": [
+        "Использовать граф сущностей вместо векторного поиска",
+        "Генерировать гипотетический ответ LLM и эмбеддить его для поиска вместо самого вопроса",
+        "Хешировать эмбеддинги для ускорения поиска",
+        "Удалять дубликаты документов перед индексацией"
+      ],
+      "answer": 1,
+      "explain": "HyDE использует эмбеддинг сгенерированного гипотетического ответа, который часто семантически ближе к реальным документам, чем короткий вопрос."
+    },
+    {
+      "q": "Когда оправдано использовать GraphRAG вместо классического chunk-based RAG?",
+      "options": [
+        "Всегда, GraphRAG строго лучше и дешевле",
+        "Когда нужны точечные ответы на простые FAQ-вопросы",
+        "Когда требуется агрегация и целостное понимание по всему большому корпусу документов",
+        "Только для маленьких баз данных до 10 документов"
+      ],
+      "answer": 2,
+      "explain": "GraphRAG оправдан для вопросов, требующих обобщения по всему корпусу (темы, связи), но дороже классического RAG из-за большого числа LLM-вызовов при индексации."
+    },
+    {
+      "q": "Какой первый шаг при отладке 'RAG выдаёт плохие ответы'?",
+      "options": [
+        "Сразу менять промпт генерации",
+        "Проверить, находит ли retrieval вообще нужные документы (Recall@k), отдельно от генерации",
+        "Увеличить температуру LLM",
+        "Сменить провайдера LLM"
+      ],
+      "answer": 1,
+      "explain": "Если ретривер не находит нужные документы, никакой промпт-инжиниринг генерации не поможет — сначала нужно чинить retrieval."
+    }
+  ]
+}

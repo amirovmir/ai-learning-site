@@ -1,0 +1,388 @@
+{
+  "phase": "Phase 2 — Classical ML",
+  "section": "⚖️ Валидация, метрики, фичи",
+  "topics": [
+    {
+      "title": "Train/Val/Test split и почему это критично",
+      "level": "🟢 Junior",
+      "explanation": "<p>Базовое правило ML: модель нельзя оценивать на данных, на которых она обучалась. Классическое разбиение — <b>train</b> (обучение), <b>validation</b> (подбор гиперпараметров), <b>test</b> (финальная непредвзятая оценка, трогаем один раз).</p><pre><code>from sklearn.model_selection import train_test_split\n\nX_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42)\nX_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)</code></pre><p>Типичные ошибки:</p><ul><li>Подгонять гиперпараметры по test-выборке — это утечка информации, метрика станет оптимистичной.</li><li>Забыть <code>random_state</code> — результаты будут невоспроизводимы.</li><li>Делать split после препроцессинга (масштабирования, импутации) — тогда статистики теста «протекают» в трейн.</li></ul><p>Совет из продакшена: всегда фиксируйте test-выборку на диске (или её индексы) и не трогайте её до самого конца проекта — иначе незаметно скатитесь в переобучение под тест.</p>",
+      "links": [
+        {
+          "title": "sklearn: train_test_split",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html"
+        },
+        {
+          "title": "sklearn: Cross-validation guide",
+          "url": "https://scikit-learn.org/stable/modules/cross_validation.html"
+        },
+        {
+          "title": "Wikipedia: Training, validation, and test data sets",
+          "url": "https://en.wikipedia.org/wiki/Training,_validation,_and_test_data_sets"
+        }
+      ]
+    },
+    {
+      "title": "Кросс-валидация: K-Fold, Stratified, Repeated",
+      "level": "🟢 Junior",
+      "explanation": "<p>Кросс-валидация (CV) даёт более надёжную оценку качества, чем один split, усредняя метрику по нескольким разбиениям.</p><ul><li><b>K-Fold</b> — данные делятся на K частей, каждая по очереди становится валидацией.</li><li><b>Stratified K-Fold</b> — сохраняет пропорции классов в каждом фолде (обязателен для классификации).</li><li><b>Repeated K-Fold</b> — несколько прогонов K-Fold с разными сидами для снижения дисперсии оценки.</li></ul><pre><code>from sklearn.model_selection import StratifiedKFold, cross_val_score\n\nskf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\nscores = cross_val_score(model, X, y, cv=skf, scoring='roc_auc')\nprint(scores.mean(), scores.std())</code></pre><table><tr><th>Метод</th><th>Когда использовать</th></tr><tr><td>KFold</td><td>Регрессия, сбалансированные данные</td></tr><tr><td>StratifiedKFold</td><td>Классификация, особенно с дисбалансом</td></tr><tr><td>GroupKFold</td><td>Есть группы (пользователи, пациенты) — нельзя разрывать</td></tr></table><p>Ошибка новичков: использовать обычный KFold для сильно несбалансированных классов — в некоторых фолдах может не оказаться ни одного примера редкого класса.</p>",
+      "links": [
+        {
+          "title": "sklearn: Cross-validation",
+          "url": "https://scikit-learn.org/stable/modules/cross_validation.html"
+        },
+        {
+          "title": "sklearn: KFold API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html"
+        },
+        {
+          "title": "sklearn: StratifiedKFold API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html"
+        }
+      ]
+    },
+    {
+      "title": "Временные ряды: валидация без утечки будущего",
+      "level": "🟡 Middle",
+      "explanation": "<p>Для временных данных случайный K-Fold — грубая ошибка: модель обучится «предсказывать прошлое по будущему», и метрики будут нереалистично хорошими.</p><p>Правильный подход — <b>TimeSeriesSplit</b> (расширяющееся окно) или <b>walk-forward validation</b>: обучение только на данных до момента t, проверка на t+1.</p><pre><code>from sklearn.model_selection import TimeSeriesSplit\n\ntscv = TimeSeriesSplit(n_splits=5)\nfor train_idx, val_idx in tscv.split(X):\n    X_tr, X_val = X[train_idx], X[val_idx]\n    y_tr, y_val = y[train_idx], y[val_idx]\n    model.fit(X_tr, y_tr)\n    print(model.score(X_val, y_val))</code></pre><p>Дополнительные нюансы продакшена:</p><ul><li>Между train и val стоит оставлять <b>gap</b> (embargo period), если фичи используют скользящие окна — иначе есть небольшая утечка через пересекающиеся окна.</li><li>Фичи вроде «среднее по всей выборке» нельзя считать до split — считайте только по прошлым данным (expanding/rolling window).</li><li>Проверяйте стабильность модели во времени — метрика может деградировать (data drift), это нормально мониторить отдельно.</li></ul>",
+      "links": [
+        {
+          "title": "sklearn: TimeSeriesSplit API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html"
+        },
+        {
+          "title": "sklearn: Cross-validation for time series",
+          "url": "https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split"
+        },
+        {
+          "title": "Forecasting: Principles and Practice (Hyndman)",
+          "url": "https://otexts.com/fpp3/"
+        }
+      ]
+    },
+    {
+      "title": "Метрики классификации: Precision, Recall, F1",
+      "level": "🟢 Junior",
+      "explanation": "<p>Accuracy обманчива при дисбалансе классов. Ключевые метрики строятся на матрице ошибок (confusion matrix): TP, FP, TN, FN.</p><ul><li><b>Precision</b> = TP/(TP+FP) — доля верных среди предсказанных положительных (важна, когда дорог FP, например спам-фильтр).</li><li><b>Recall</b> = TP/(TP+FN) — доля найденных из всех настоящих положительных (важна, когда дорог FN, например диагностика рака).</li><li><b>F1</b> = 2·P·R/(P+R) — гармоническое среднее, баланс между ними.</li></ul><pre><code>from sklearn.metrics import classification_report, confusion_matrix\n\nprint(confusion_matrix(y_test, y_pred))\nprint(classification_report(y_test, y_pred, digits=3))</code></pre><p>Совет: всегда явно решайте, какая ошибка дороже бизнесу, и выбирайте порог классификации (threshold), а не полагайтесь на дефолтный 0.5. Порог можно подбирать по кривой precision-recall под конкретный recall/precision target.</p>",
+      "links": [
+        {
+          "title": "sklearn: Precision, Recall, F1 (User Guide)",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-f-measure-metrics"
+        },
+        {
+          "title": "sklearn: classification_report API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.classification_report.html"
+        },
+        {
+          "title": "Wikipedia: Precision and recall",
+          "url": "https://en.wikipedia.org/wiki/Precision_and_recall"
+        }
+      ]
+    },
+    {
+      "title": "ROC-AUC и PR-AUC: когда что использовать",
+      "level": "🟡 Middle",
+      "explanation": "<p><b>ROC-AUC</b> измеряет способность модели ранжировать положительные примеры выше отрицательных, независимо от порога. Строится по TPR (recall) vs FPR.</p><p><b>PR-AUC</b> (Precision-Recall AUC) гораздо информативнее при сильном дисбалансе классов — ROC-AUC может выглядеть хорошо даже при плохой модели, если негативного класса очень много.</p><pre><code>from sklearn.metrics import roc_auc_score, average_precision_score\n\nroc = roc_auc_score(y_test, y_proba)\npr_auc = average_precision_score(y_test, y_proba)\nprint(f'ROC-AUC={roc:.3f}, PR-AUC={pr_auc:.3f}')</code></pre><table><tr><th>Ситуация</th><th>Метрика</th></tr><tr><td>Классы сбалансированы</td><td>ROC-AUC</td></tr><tr><td>Редкий положительный класс (fraud, defect)</td><td>PR-AUC</td></tr></table><p>Продакшн-совет: если положительного класса 1%, модель с ROC-AUC=0.95 может иметь ужасный PR-AUC ~0.15 — всегда смотрите обе метрики и baseline (случайный классификатор для PR-AUC равен доле положительного класса).</p>",
+      "links": [
+        {
+          "title": "sklearn: ROC curve and AUC",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#roc-metrics"
+        },
+        {
+          "title": "sklearn: Precision-Recall",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-and-f-measures"
+        },
+        {
+          "title": "Wikipedia: Receiver operating characteristic",
+          "url": "https://en.wikipedia.org/wiki/Receiver_operating_characteristic"
+        }
+      ]
+    },
+    {
+      "title": "Метрики регрессии: MAE, MSE, RMSE, R², MAPE",
+      "level": "🟢 Junior",
+      "explanation": "<p>Выбор метрики регрессии зависит от чувствительности к выбросам и интерпретируемости.</p><ul><li><b>MAE</b> — среднее абсолютное отклонение, устойчива к выбросам, в единицах целевой переменной.</li><li><b>MSE/RMSE</b> — сильнее штрафует большие ошибки (квадрат), RMSE в тех же единицах, что и таргет.</li><li><b>R²</b> — доля объяснённой дисперсии, удобна для сравнения моделей, но может быть отрицательной для плохой модели.</li><li><b>MAPE</b> — процентная ошибка, интуитивна для бизнеса, но ломается при значениях таргета около нуля.</li></ul><pre><code>from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score\n\nmae = mean_absolute_error(y_test, y_pred)\nrmse = mean_squared_error(y_test, y_pred, squared=False)\nr2 = r2_score(y_test, y_pred)</code></pre><p>Типичная ошибка: использовать MAPE, когда в данных есть нули или значения около нуля — метрика взрывается. В таких случаях лучше SMAPE или MAE в абсолютных единицах.</p>",
+      "links": [
+        {
+          "title": "sklearn: Regression metrics",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#regression-metrics"
+        },
+        {
+          "title": "sklearn: mean_absolute_error API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_absolute_error.html"
+        },
+        {
+          "title": "Wikipedia: Coefficient of determination (R²)",
+          "url": "https://en.wikipedia.org/wiki/Coefficient_of_determination"
+        }
+      ]
+    },
+    {
+      "title": "Дисбаланс классов: undersampling, oversampling, SMOTE",
+      "level": "🟡 Middle",
+      "explanation": "<p>При сильном дисбалансе (например, 1:100) модель может научиться просто всегда предсказывать мажоритарный класс. Подходы:</p><ul><li><b>Class weights</b> — самый безопасный способ, штрафует ошибки на редком классе сильнее, не меняет данные.</li><li><b>Undersampling</b> — убираем часть мажоритарного класса, теряем данные.</li><li><b>Oversampling / SMOTE</b> — генерируем синтетические примеры редкого класса.</li></ul><pre><code>from sklearn.linear_model import LogisticRegression\nfrom imblearn.over_sampling import SMOTE\n\n# Вариант 1: class_weight\nmodel = LogisticRegression(class_weight='balanced')\n\n# Вариант 2: SMOTE (ТОЛЬКО на train, после split!)\nsmote = SMOTE(random_state=42)\nX_train_res, y_train_res = smote.fit_resample(X_train, y_train)</code></pre><p><b>Критично:</b> SMOTE/undersampling применяются только к train-выборке, после split, и обязательно внутри каждого фолда CV (через <code>imblearn.pipeline.Pipeline</code>), иначе синтетические точки из теста «просочатся» в трейн через соседей — классическая утечка данных.</p>",
+      "links": [
+        {
+          "title": "imbalanced-learn documentation",
+          "url": "https://imbalanced-learn.org/stable/"
+        },
+        {
+          "title": "imbalanced-learn: SMOTE API",
+          "url": "https://imbalanced-learn.org/stable/references/generated/imblearn.over_sampling.SMOTE.html"
+        },
+        {
+          "title": "sklearn: LogisticRegression (class_weight)",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html"
+        },
+        {
+          "title": "SMOTE original paper (arXiv)",
+          "url": "https://arxiv.org/abs/1106.1813"
+        }
+      ]
+    },
+    {
+      "title": "Feature Engineering: базовые техники",
+      "level": "🟢 Junior",
+      "explanation": "<p>Качество фичей часто важнее выбора алгоритма. Базовый набор техник:</p><ul><li>Извлечение признаков из дат: день недели, месяц, is_weekend, дни до праздника.</li><li>Взаимодействия признаков: произведения, отношения (price/area).</li><li>Агрегаты по группам: среднее/медиана/std по категории.</li><li>Биннинг непрерывных признаков в категории.</li></ul><pre><code>import pandas as pd\n\ndf['dow'] = df['date'].dt.dayofweek\ndf['is_weekend'] = df['dow'].isin([5, 6]).astype(int)\ndf['price_per_m2'] = df['price'] / df['area']\ndf['city_avg_price'] = df.groupby('city')['price'].transform('mean')</code></pre><p>Совет из практики: агрегаты по группам (типа <code>city_avg_price</code>) считайте только по train, а на val/test применяйте уже посчитанные на train значения через merge — иначе это тоже форма утечки данных (target leakage через агрегацию всего датасета).</p>",
+      "links": [
+        {
+          "title": "pandas: dt accessor documentation",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.Series.dt.html"
+        },
+        {
+          "title": "pandas: groupby documentation",
+          "url": "https://pandas.pydata.org/docs/user_guide/groupby.html"
+        },
+        {
+          "title": "Feature Engineering (Kaggle Learn)",
+          "url": "https://www.kaggle.com/learn/feature-engineering"
+        }
+      ]
+    },
+    {
+      "title": "Кодирование категориальных признаков",
+      "level": "🟡 Middle",
+      "explanation": "<p>Способы кодирования категорий зависят от кардинальности и типа модели:</p><table><tr><th>Метод</th><th>Когда</th></tr><tr><td>One-Hot</td><td>Низкая кардинальность (&lt;15), линейные модели</td></tr><tr><td>Ordinal</td><td>Есть естественный порядок (S&lt;M&lt;L)</td></tr><tr><td>Target Encoding</td><td>Высокая кардинальность, деревья/бустинг</td></tr><tr><td>Frequency Encoding</td><td>Быстрая замена без утечек</td></tr></table><pre><code>from category_encoders import TargetEncoder\n\nenc = TargetEncoder(cols=['city'], smoothing=10)\nenc.fit(X_train, y_train)\nX_train_enc = enc.transform(X_train)\nX_test_enc = enc.transform(X_test)  # transform, не fit_transform!</code></pre><p>One-Hot для признака с 10000 уникальных значений создаст 10000 разреженных колонок — используйте target/frequency encoding или hashing trick. Про target encoding подробнее — следующая тема, там кроется главная ловушка утечки.</p>",
+      "links": [
+        {
+          "title": "category_encoders documentation",
+          "url": "https://contrib.scikit-learn.org/category_encoders/"
+        },
+        {
+          "title": "sklearn: OneHotEncoder API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html"
+        },
+        {
+          "title": "sklearn: preprocessing guide",
+          "url": "https://scikit-learn.org/stable/modules/preprocessing.html"
+        }
+      ]
+    },
+    {
+      "title": "Target Encoding и утечка данных",
+      "level": "🔴 Senior",
+      "explanation": "<p>Target encoding заменяет категорию на статистику таргета (например, среднее) по этой категории. Проблема: если считать среднее таргета по всему трейну и применить к тем же строкам, модель фактически «видит» свой ответ — сильная утечка, переобучение.</p><p>Правильная реализация — <b>out-of-fold target encoding</b>: для каждой строки таргет-статистика считается по фолдам, не включающим саму строку.</p><pre><code>from sklearn.model_selection import KFold\nimport numpy as np\n\ndef oof_target_encode(X, y, col, n_splits=5, smoothing=10):\n    encoded = np.zeros(len(X))\n    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)\n    global_mean = y.mean()\n    for tr_idx, val_idx in kf.split(X):\n        stats = y.iloc[tr_idx].groupby(X[col].iloc[tr_idx]).mean()\n        counts = y.iloc[tr_idx].groupby(X[col].iloc[tr_idx]).count()\n        smoothed = (stats * counts + global_mean * smoothing) / (counts + smoothing)\n        encoded[val_idx] = X[col].iloc[val_idx].map(smoothed).fillna(global_mean)\n    return encoded</code></pre><p>Также добавляйте сглаживание (smoothing) для редких категорий — иначе категория с одним примером получит таргет-статистику, равную этому одному значению, что переобучится мгновенно. На test/val применяется статистика, посчитанная по всему train (без OOF).</p>",
+      "links": [
+        {
+          "title": "category_encoders: TargetEncoder API",
+          "url": "https://contrib.scikit-learn.org/category_encoders/targetencoder.html"
+        },
+        {
+          "title": "sklearn: KFold API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html"
+        },
+        {
+          "title": "Kaggle: Target Encoding guide",
+          "url": "https://www.kaggle.com/code/ryanholbrook/target-encoding"
+        }
+      ]
+    },
+    {
+      "title": "Масштабирование признаков: Standard, MinMax, Robust",
+      "level": "🟢 Junior",
+      "explanation": "<p>Масштабирование необходимо для алгоритмов, чувствительных к масштабу (линейные модели, SVM, KNN, нейросети). Деревьям и бустингам обычно масштабирование не нужно.</p><ul><li><b>StandardScaler</b> — (x-mean)/std, предполагает примерно нормальное распределение.</li><li><b>MinMaxScaler</b> — приводит к [0,1], чувствителен к выбросам.</li><li><b>RobustScaler</b> — использует медиану и IQR, устойчив к выбросам.</li></ul><pre><code>from sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import Pipeline\n\npipe = Pipeline([\n    ('scaler', StandardScaler()),\n    ('model', LogisticRegression())\n])\npipe.fit(X_train, y_train)  # scaler.fit только на train внутри pipeline</code></pre><p>Главная ошибка: вызывать <code>scaler.fit_transform(X)</code> на всём датасете до split — статистики (mean, std) теста утекают в train. Всегда используйте <code>Pipeline</code> или явно fit только на train, потом transform на val/test.</p>",
+      "links": [
+        {
+          "title": "sklearn: preprocessing (scaling) guide",
+          "url": "https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing-scaler"
+        },
+        {
+          "title": "sklearn: StandardScaler API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html"
+        },
+        {
+          "title": "sklearn: Pipeline documentation",
+          "url": "https://scikit-learn.org/stable/modules/compose.html#pipeline"
+        }
+      ]
+    },
+    {
+      "title": "Отбор признаков (Feature Selection)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Лишние признаки увеличивают риск переобучения, время обучения и усложняют интерпретацию. Основные подходы:</p><ul><li><b>Filter</b> — статистические тесты (корреляция, chi2, mutual information), быстро, независимо от модели.</li><li><b>Wrapper</b> — RFE (Recursive Feature Elimination), перебор подмножеств с оценкой качества модели, точнее но дороже.</li><li><b>Embedded</b> — важность признаков встроена в модель (L1-регуляризация, feature_importances_ у деревьев).</li></ul><pre><code>from sklearn.feature_selection import RFECV\nfrom sklearn.ensemble import RandomForestClassifier\n\nselector = RFECV(RandomForestClassifier(random_state=42), step=1, cv=5, scoring='f1')\nselector.fit(X_train, y_train)\nprint('Отобрано признаков:', selector.n_features_)\nX_train_sel = selector.transform(X_train)</code></pre><p>Совет: feature importance у случайного леса смещена в сторону признаков с высокой кардинальностью — используйте permutation importance для более честной оценки. И всегда делайте отбор признаков внутри CV-фолда, а не один раз на всех данных.</p>",
+      "links": [
+        {
+          "title": "sklearn: Feature selection guide",
+          "url": "https://scikit-learn.org/stable/modules/feature_selection.html"
+        },
+        {
+          "title": "sklearn: RFECV API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.RFECV.html"
+        },
+        {
+          "title": "sklearn: Permutation importance",
+          "url": "https://scikit-learn.org/stable/modules/permutation_importance.html"
+        }
+      ]
+    },
+    {
+      "title": "Data Leakage: полный каталог типов утечек",
+      "level": "🔴 Senior",
+      "explanation": "<p>Data leakage — самая частая причина «модель отлично работает на валидации, но проваливается в проде». Основные типы:</p><ul><li><b>Target leakage</b> — фича содержит информацию, недоступную на момент предсказания (например, «дата отмены заказа» при прогнозе отмены).</li><li><b>Train-test contamination</b> — препроцессинг (scaling, encoding, impute) выполнен до split.</li><li><b>Temporal leakage</b> — использование будущих данных для прогноза прошлого.</li><li><b>Group leakage</b> — записи одного пользователя/сущности попадают и в train, и в test (нужен <code>GroupKFold</code>).</li><li><b>Duplicate leakage</b> — дубликаты строк случайно оказались по разные стороны split.</li></ul><pre><code>from sklearn.model_selection import GroupKFold\n\ngkf = GroupKFold(n_splits=5)\nfor tr_idx, val_idx in gkf.split(X, y, groups=df['user_id']):\n    ...</code></pre><p>Практический чек-лист перед сдачей модели: (1) пересчитайте все агрегаты только по train; (2) проверьте нет ли фичей, вычисляемых «постфактум»; (3) убедитесь, что нет пересечения ключевых сущностей между train/test; (4) если метрика подозрительно высокая (AUC=0.999) — почти всегда утечка, а не гениальная модель.</p>",
+      "links": [
+        {
+          "title": "sklearn: GroupKFold API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html"
+        },
+        {
+          "title": "sklearn: Cross-validation (data leakage notes)",
+          "url": "https://scikit-learn.org/stable/modules/cross_validation.html"
+        },
+        {
+          "title": "Wikipedia: Leakage (machine learning)",
+          "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)"
+        }
+      ]
+    },
+    {
+      "title": "Калибровка вероятностей",
+      "level": "🔴 Senior",
+      "explanation": "<p>Модель может хорошо ранжировать объекты (высокий ROC-AUC), но её вероятности некалиброваны — например, предсказывает 0.9, а реальная частота события среди таких случаев 0.6. Это критично, когда вероятность используется напрямую (риск-скоринг, ставки, пороги для бизнес-решений).</p><p>Проверка калибровки — <b>reliability diagram</b> и <b>Brier score</b>. Методы калибровки:</p><ul><li><b>Platt Scaling</b> — логистическая регрессия поверх выходов модели, хорошо для малых выборок.</li><li><b>Isotonic Regression</b> — непараметрическая, гибче, но требует больше данных.</li></ul><pre><code>from sklearn.calibration import CalibratedClassifierCV, calibration_curve\n\ncalibrated = CalibratedClassifierCV(base_model, method='isotonic', cv=5)\ncalibrated.fit(X_train, y_train)\n\nprob_true, prob_pred = calibration_curve(y_test, calibrated.predict_proba(X_test)[:, 1], n_bins=10)</code></pre><p>Особенно важно калибровать вероятности бустингов (XGBoost/LightGBM) и SVM — они часто «пере-уверены» в предсказаниях около 0 и 1. Калибровку всегда обучайте на отдельном holdout, не на том же train, что и базовую модель.</p>",
+      "links": [
+        {
+          "title": "sklearn: Probability calibration guide",
+          "url": "https://scikit-learn.org/stable/modules/calibration.html"
+        },
+        {
+          "title": "sklearn: CalibratedClassifierCV API",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.calibration.CalibratedClassifierCV.html"
+        },
+        {
+          "title": "Wikipedia: Brier score",
+          "url": "https://en.wikipedia.org/wiki/Brier_score"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Почему нельзя подбирать гиперпараметры по test-выборке?",
+      "options": [
+        "Это замедляет обучение модели",
+        "Test-выборка обычно слишком мала для этого",
+        "Метрика на test станет оптимистично смещённой из-за утечки информации",
+        "Sklearn технически запрещает это делать"
+      ],
+      "answer": 2,
+      "explain": "Подбор гиперпараметров по test превращает его фактически в validation, и итоговая оценка перестаёт быть непредвзятой."
+    },
+    {
+      "q": "Какой тип кросс-валидации нужен для сильно несбалансированной бинарной классификации?",
+      "options": [
+        "Обычный KFold",
+        "StratifiedKFold",
+        "LeaveOneOut без стратификации",
+        "ShuffleSplit с одним разбиением"
+      ],
+      "answer": 1,
+      "explain": "StratifiedKFold сохраняет пропорции классов в каждом фолде, что критично при дисбалансе."
+    },
+    {
+      "q": "Какой метод валидации корректен для временных рядов?",
+      "options": [
+        "Случайный K-Fold с shuffle=True",
+        "TimeSeriesSplit / walk-forward validation",
+        "Обычный train_test_split со стратификацией",
+        "LeaveOneOut по всей выборке"
+      ],
+      "answer": 1,
+      "explain": "TimeSeriesSplit обучает только на прошлых данных и проверяет на будущих, избегая утечки будущего в прошлое."
+    },
+    {
+      "q": "Recall важнее всего максимизировать в задаче:",
+      "options": [
+        "Фильтрация спама (важно не заблокировать хорошее письмо)",
+        "Скрининг онкозаболеваний (важно не пропустить больного)",
+        "Рекомендация фильмов",
+        "Прогноз цены на квартиру"
+      ],
+      "answer": 1,
+      "explain": "В медицинском скрининге цена пропуска (FN) больного очень высока, поэтому важен высокий recall даже ценой precision."
+    },
+    {
+      "q": "Почему ROC-AUC может вводить в заблуждение при сильном дисбалансе классов?",
+      "options": [
+        "ROC-AUC не работает с вероятностями",
+        "ROC-AUC учитывает TN, которых при дисбалансе очень много, что маскирует плохую работу по редкому классу",
+        "ROC-AUC требует ровно 2 класса и ломается на дисбалансе технически",
+        "ROC-AUC всегда равен 0.5 при дисбалансе"
+      ],
+      "answer": 1,
+      "explain": "FPR = FP/(FP+TN), а при огромном TN даже много ложноположительных дают низкий FPR — метрика выглядит хорошо незаслуженно."
+    },
+    {
+      "q": "Какую метрику регрессии не стоит использовать, если в таргете есть значения близкие к нулю?",
+      "options": [
+        "MAE",
+        "RMSE",
+        "MAPE",
+        "R²"
+      ],
+      "answer": 2,
+      "explain": "MAPE делит на фактическое значение, и при значениях около нуля ошибка стремится к бесконечности."
+    },
+    {
+      "q": "Что не так с применением SMOTE до train_test_split?",
+      "options": [
+        "SMOTE вообще нельзя использовать для классификации",
+        "Синтетические примеры, созданные из объектов, попавших позже в test, приводят к утечке данных",
+        "SMOTE работает только с регрессией",
+        "SMOTE замедляет обучение более чем в 100 раз"
+      ],
+      "answer": 1,
+      "explain": "Если SMOTE применён до split, синтетические точки могут быть похожи на объекты в test, что завышает метрики."
+    },
+    {
+      "q": "В чём главная опасность обычного target encoding без out-of-fold схемы?",
+      "options": [
+        "Он слишком медленный для больших датасетов",
+        "Он не работает с числовыми таргетами",
+        "Строка кодируется статистикой, посчитанной с учётом её же таргета — прямая утечка",
+        "Он требует GPU для вычислений"
+      ],
+      "answer": 2,
+      "explain": "Без OOF-схемы среднее по категории включает и текущую строку, из-за чего модель фактически подсматривает ответ."
+    },
+    {
+      "q": "Почему GroupKFold нужен, когда в данных есть несколько записей на одного пользователя?",
+      "options": [
+        "Он ускоряет обучение модели",
+        "Он гарантирует, что записи одного пользователя не окажутся одновременно в train и test, предотвращая утечку",
+        "Он автоматически балансирует классы",
+        "Он заменяет масштабирование признаков"
+      ],
+      "answer": 1,
+      "explain": "Если записи одного пользователя есть и в train, и в test, модель может просто запомнить пользователя — group leakage."
+    },
+    {
+      "q": "Модель имеет ROC-AUC=0.9, но плохо откалибрована. Что это значит на практике?",
+      "options": [
+        "Модель вообще бесполезна и её нужно выбросить",
+        "Модель хорошо ранжирует объекты, но её предсказанные вероятности не соответствуют реальным частотам событий",
+        "Нужно пересчитать ROC-AUC — такое сочетание невозможно",
+        "Калибровка не имеет отношения к вероятностям модели"
+      ],
+      "answer": 1,
+      "explain": "Ранжирующая способность (AUC) и качество вероятностной калибровки — разные свойства; модель может хорошо ранжировать, но давать неточные абсолютные вероятности."
+    }
+  ]
+}

@@ -1,0 +1,388 @@
+{
+  "phase": "Phase 2 — Classical ML",
+  "section": "🌲 Деревья и ансамбли",
+  "topics": [
+    {
+      "title": "Решающие деревья (Decision Trees)",
+      "level": "🟢 Junior",
+      "explanation": "<p>Дерево решений рекурсивно разбивает пространство признаков на прямоугольные области, в каждой из которых предсказание — константа (среднее для регрессии, мажоритарный класс для классификации). Дерево строится жадно: на каждом шаге выбирается признак и порог, дающие максимальный прирост качества разбиения.</p><ul><li>Плюсы: интерпретируемость, не требует масштабирования признаков, работает с категориальными и числовыми данными.</li><li>Минусы: сильно переобучается на глубоких деревьях, нестабильно — небольшое изменение данных сильно меняет структуру.</li></ul><pre><code class=\"language-python\">from sklearn.tree import DecisionTreeClassifier\nclf = DecisionTreeClassifier(max_depth=5, min_samples_leaf=10, random_state=42)\nclf.fit(X_train, y_train)\n</code></pre><p>Типичная ошибка новичков — не ограничивать <code>max_depth</code>/<code>min_samples_leaf</code>: дерево без ограничений подгоняется под шум и даёт 100% accuracy на трейне, но плохо генерализуется. В продакшене одиночные деревья почти не используют — они служат базой для ансамблей (Random Forest, бустинг).</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Decision Trees",
+          "url": "https://scikit-learn.org/stable/modules/tree.html"
+        },
+        {
+          "title": "Wikipedia: Decision tree learning",
+          "url": "https://en.wikipedia.org/wiki/Decision_tree_learning"
+        },
+        {
+          "title": "sklearn.tree.DecisionTreeClassifier docs",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html"
+        }
+      ]
+    },
+    {
+      "title": "Критерии разбиения: Gini, Entropy, MSE",
+      "level": "🟢 Junior",
+      "explanation": "<p>При построении дерева алгоритм ищет разбиение, минимизирующее \"нечистоту\" (impurity) в дочерних узлах. Для классификации используют критерий Джини или энтропию, для регрессии — MSE/MAE.</p><table><tr><th>Критерий</th><th>Формула</th><th>Применение</th></tr><tr><td>Gini</td><td>1 − Σp_i²</td><td>классификация, быстрее считается</td></tr><tr><td>Entropy</td><td>−Σp_i·log(p_i)</td><td>классификация, чуть чувствительнее к дисбалансу</td></tr><tr><td>MSE</td><td>Σ(y − ȳ)²</td><td>регрессия</td></tr></table><p>На практике Gini и Entropy почти всегда дают похожие деревья — выбор критерия редко влияет сильно на итоговое качество, важнее глубина и регуляризация.</p><pre><code class=\"language-python\">DecisionTreeClassifier(criterion='entropy')  # или 'gini' (по умолчанию)\n</code></pre><p>Совет: не тратьте время на подбор критерия — лучше потратьте его на тюнинг глубины, min_samples_split и на кросс-валидацию.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Decision Trees (Mathematical formulation)",
+          "url": "https://scikit-learn.org/stable/modules/tree.html#mathematical-formulation"
+        },
+        {
+          "title": "Wikipedia: Decision tree learning (Gini impurity)",
+          "url": "https://en.wikipedia.org/wiki/Decision_tree_learning"
+        },
+        {
+          "title": "Wikipedia: Entropy (information theory)",
+          "url": "https://en.wikipedia.org/wiki/Entropy_(information_theory)"
+        }
+      ]
+    },
+    {
+      "title": "Bagging и Random Forest",
+      "level": "🟢 Junior",
+      "explanation": "<p>Bagging (Bootstrap Aggregating) снижает дисперсию модели: обучаем много деревьев на разных бутстрэп-выборках (с возвращением) и усредняем предсказания (голосование для классификации, среднее для регрессии). Random Forest дополнительно на каждом разбиении рассматривает случайное подмножество признаков — это разнообразит деревья и снижает корреляцию между ними.</p><pre><code class=\"language-python\">from sklearn.ensemble import RandomForestClassifier\nrf = RandomForestClassifier(\n    n_estimators=300, max_depth=None,\n    max_features='sqrt', n_jobs=-1, random_state=42\n)\nrf.fit(X_train, y_train)\n</code></pre><ul><li>Каждое дерево можно растить глубоким (низкий bias) — ансамблирование компенсирует высокий variance отдельного дерева.</li><li>OOB-оценка (<code>oob_score=True</code>) даёт бесплатную оценку качества без отдельного валидационного сплита.</li><li>Хорошо параллелится (<code>n_jobs=-1</code>), устойчив к выбросам и мультиколлинеарности.</li></ul><p>Типичная ошибка: ставить слишком мало деревьев (n_estimators=10) — качество продолжает расти до сотен деревьев, а стоимость инференса растёт линейно, так что баланс нужно подбирать под задачу.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Ensemble methods - Random Forests",
+          "url": "https://scikit-learn.org/stable/modules/ensemble.html#random-forests"
+        },
+        {
+          "title": "Breiman (2001): Random Forests paper",
+          "url": "https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf"
+        },
+        {
+          "title": "Wikipedia: Bootstrap aggregating",
+          "url": "https://en.wikipedia.org/wiki/Bootstrap_aggregating"
+        }
+      ]
+    },
+    {
+      "title": "Градиентный бустинг: интуиция",
+      "level": "🟡 Middle",
+      "explanation": "<p>В отличие от bagging, бустинг строит деревья последовательно: каждое новое дерево обучается предсказывать остатки (градиент функции потерь) предыдущего ансамбля, постепенно исправляя его ошибки.</p><pre><code class=\"language-python\">F_0(x) = среднее y  # начальное приближение\nfor m in range(1, M):\n    r = -grad(loss(y, F_{m-1}(x)))   # псевдо-остатки\n    h_m = DecisionTree().fit(X, r)  # дерево на остатки\n    F_m(x) = F_{m-1}(x) + lr * h_m(x)  # шаг с learning rate\n</code></pre><p>Ключевая идея: каждое дерево слабое (обычно неглубокое, depth 3-8), а сила — в их сумме с малым шагом обучения (learning_rate). Это снижает bias шаг за шагом, но требует контроля переобучения через:</p><ul><li>learning_rate (обычно 0.01–0.3, меньше — нужно больше деревьев)</li><li>early stopping по валидационной метрике</li><li>ограничение глубины/листьев отдельного дерева</li></ul><p>Частая ошибка: ставить большой learning_rate с большим n_estimators — модель быстро переобучается. Всегда используйте early_stopping_rounds на отложенной выборке.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Gradient Boosting",
+          "url": "https://scikit-learn.org/stable/modules/ensemble.html#gradient-boosting"
+        },
+        {
+          "title": "Friedman (2001): Greedy Function Approximation",
+          "url": "https://jerryfriedman.su.domains/ftp/trebst.pdf"
+        },
+        {
+          "title": "Wikipedia: Gradient boosting",
+          "url": "https://en.wikipedia.org/wiki/Gradient_boosting"
+        }
+      ]
+    },
+    {
+      "title": "XGBoost",
+      "level": "🟡 Middle",
+      "explanation": "<p>XGBoost — оптимизированная реализация градиентного бустинга со второй производной (Ньютоновский шаг), встроенной L1/L2-регуляризацией листьев и эффективной работой с разреженными данными и пропусками.</p><pre><code class=\"language-python\">import xgboost as xgb\nmodel = xgb.XGBClassifier(\n    n_estimators=1000, max_depth=6, learning_rate=0.05,\n    subsample=0.8, colsample_bytree=0.8,\n    reg_lambda=1.0, eval_metric='logloss'\n)\nmodel.fit(X_train, y_train,\n          eval_set=[(X_val, y_val)],\n          early_stopping_rounds=50, verbose=False)\n</code></pre><ul><li><code>subsample</code>/<code>colsample_bytree</code> — стохастичность, снижает переобучение (аналог bagging внутри бустинга).</li><li>Пропуски (NaN) XGBoost обрабатывает нативно, находя оптимальное направление для них при разбиении.</li><li>Дерево растёт level-wise (по уровням) по умолчанию — контролируется <code>max_depth</code>.</li></ul><p>Продакшн-совет: всегда фиксируйте <code>random_state</code>, сохраняйте модель через <code>save_model('model.json')</code> (не pickle — версии XGBoost могут ломать совместимость pickle).</p>",
+      "links": [
+        {
+          "title": "XGBoost Documentation",
+          "url": "https://xgboost.readthedocs.io/"
+        },
+        {
+          "title": "Chen & Guestrin (2016): XGBoost paper (arXiv)",
+          "url": "https://arxiv.org/abs/1603.02754"
+        },
+        {
+          "title": "XGBoost Python API Reference",
+          "url": "https://xgboost.readthedocs.io/en/stable/python/python_api.html"
+        }
+      ]
+    },
+    {
+      "title": "LightGBM",
+      "level": "🟡 Middle",
+      "explanation": "<p>LightGBM — реализация бустинга от Microsoft, оптимизированная под скорость на больших датасетах. Ключевые отличия от XGBoost: leaf-wise рост дерева (выбирает лист с максимальным приростом, а не растит все листья уровня) и гистограммный алгоритм разбиений.</p><pre><code class=\"language-python\">import lightgbm as lgb\nmodel = lgb.LGBMClassifier(\n    n_estimators=2000, num_leaves=31, learning_rate=0.03,\n    feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=5\n)\nmodel.fit(X_train, y_train,\n          eval_set=[(X_val, y_val)],\n          callbacks=[lgb.early_stopping(100)])\n</code></pre><ul><li>Leaf-wise даёт более точные деревья при том же числе листьев, но легче переобучается на маленьких данных — важно ограничивать <code>num_leaves</code> и <code>min_data_in_leaf</code>.</li><li>Заметно быстрее XGBoost на больших датасетах (миллионы строк) за счёт гистограмм и бинаризации признаков.</li><li>Нативная поддержка категориальных признаков через <code>categorical_feature</code> без one-hot.</li></ul><p>Частая ловушка: <code>num_leaves</code> должен быть меньше 2^max_depth, иначе дерево фактически неограничено и легко переобучается — держите правило <code>num_leaves ≈ 2^max_depth * 0.7</code>.</p>",
+      "links": [
+        {
+          "title": "LightGBM Documentation",
+          "url": "https://lightgbm.readthedocs.io/"
+        },
+        {
+          "title": "LightGBM Features overview",
+          "url": "https://lightgbm.readthedocs.io/en/latest/Features.html"
+        },
+        {
+          "title": "LightGBM Parameters Guide",
+          "url": "https://lightgbm.readthedocs.io/en/latest/Parameters.html"
+        }
+      ]
+    },
+    {
+      "title": "CatBoost",
+      "level": "🟡 Middle",
+      "explanation": "<p>CatBoost (Yandex) специализируется на категориальных признаках и борьбе с target leakage при их кодировании. Использует ordered target encoding — статистики по таргету считаются только по \"предыдущим\" в случайной перестановке объектам, что снижает переобучение.</p><pre><code class=\"language-python\">from catboost import CatBoostClassifier\nmodel = CatBoostClassifier(\n    iterations=1500, depth=6, learning_rate=0.05,\n    cat_features=['city', 'category'],\n    early_stopping_rounds=50, verbose=100\n)\nmodel.fit(X_train, y_train, eval_set=(X_val, y_val))\n</code></pre><ul><li>Не требует ручного encoding категорий (label/one-hot) — передайте индексы/имена столбцов в <code>cat_features</code>.</li><li>Использует симметричные (oblivious) деревья — все узлы на одном уровне используют один и тот же признак и порог, что ускоряет инференс.</li><li>Часто даёт лучшее качество \"из коробки\" без долгого тюнинга на данных с большим числом категориальных признаков (например, в задачах ритейла/рекламы).</li></ul><p>Совет: если в данных много high-cardinality категорий (ID пользователя, город), CatBoost обычно выигрывает у XGBoost/LightGBM с naive one-hot/label encoding.</p>",
+      "links": [
+        {
+          "title": "CatBoost Documentation",
+          "url": "https://catboost.ai/docs/"
+        },
+        {
+          "title": "Prokhorenkova et al. (2018): CatBoost paper (arXiv)",
+          "url": "https://arxiv.org/abs/1706.09516"
+        },
+        {
+          "title": "CatBoost: Working with categorical features",
+          "url": "https://catboost.ai/docs/en/concepts/algorithm-main-stages_cat-to-numberic"
+        }
+      ]
+    },
+    {
+      "title": "Категориальные признаки в бустинге",
+      "level": "🟡 Middle",
+      "explanation": "<p>Способ кодирования категорий сильно влияет на качество бустинга и риск переобучения.</p><table><tr><th>Метод</th><th>Когда использовать</th><th>Риск</th></tr><tr><td>One-hot</td><td>мало уникальных значений (&lt;10)</td><td>взрыв размерности при высокой кардинальности</td></tr><tr><td>Label encoding</td><td>деревья не требуют порядка, но не оптимально</td><td>случайный порядок может дать шумные разбиения</td></tr><tr><td>Target encoding</td><td>высокая кардинальность (ID, город)</td><td>data leakage без правильной кросс-валидации</td></tr><tr><td>Native (CatBoost/LightGBM)</td><td>всегда, если библиотека поддерживает</td><td>минимальный при ordered/leave-one-out схемах</td></tr></table><pre><code class=\"language-python\"># Target encoding с защитой от leakage через KFold\nfrom sklearn.model_selection import KFold\nkf = KFold(n_splits=5, shuffle=True, random_state=42)\nfor train_idx, val_idx in kf.split(X):\n    means = X.iloc[train_idx].groupby('city')['target'].mean()\n    X.loc[val_idx, 'city_te'] = X.loc[val_idx, 'city'].map(means)\n</code></pre><p>Главная ошибка джуниоров — считать target encoding на всей выборке сразу (без fold-схемы), что даёт утечку таргета и завышенную метрику на трейне, но провал на проде.</p>",
+      "links": [
+        {
+          "title": "CatBoost Docs: Categorical features",
+          "url": "https://catboost.ai/docs/en/concepts/algorithm-main-stages_cat-to-numberic"
+        },
+        {
+          "title": "scikit-learn: Encoding categorical features",
+          "url": "https://scikit-learn.org/stable/modules/preprocessing.html#encoding-categorical-features"
+        },
+        {
+          "title": "scikit-learn: KFold cross-validation",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html"
+        }
+      ]
+    },
+    {
+      "title": "Важность признаков (Feature Importance)",
+      "level": "🟡 Middle",
+      "explanation": "<p>Стандартная feature_importance в деревьях/бустинге (gain, split count, weight) показывает, как часто/эффективно признак использовался для разбиений, но может вводить в заблуждение при коррелированных признаках или разной кардинальности.</p><pre><code class=\"language-python\">import pandas as pd\nimp = pd.Series(model.feature_importances_, index=X.columns)\nimp.sort_values(ascending=False).head(15).plot.barh()\n</code></pre><ul><li><b>Gain</b> — суммарный прирост качества от разбиений по признаку (обычно самый информативный).</li><li><b>Split/weight</b> — сколько раз признак использовался (может завышать важность high-cardinality признаков, которые легко находят разбиения по шуму).</li><li><b>Permutation importance</b> — перемешиваем значения признака и смотрим падение метрики на валидации; надёжнее, но дороже вычислительно и требует отложенной выборки.</li></ul><p>Совет: не полагайтесь только на встроенный feature_importance для feature selection — коррелированные признаки \"делят\" важность между собой, и один из них может выглядеть неважным, хотя удаление обоих сильно ухудшит модель. Используйте permutation importance или SHAP для более честной картины.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: Permutation feature importance",
+          "url": "https://scikit-learn.org/stable/modules/permutation_importance.html"
+        },
+        {
+          "title": "scikit-learn: Feature importances with a forest of trees",
+          "url": "https://scikit-learn.org/stable/auto_examples/ensemble/plot_forest_importances.html"
+        },
+        {
+          "title": "XGBoost Python API (plot_importance)",
+          "url": "https://xgboost.readthedocs.io/en/stable/python/python_api.html"
+        }
+      ]
+    },
+    {
+      "title": "SHAP: интерпретация предсказаний",
+      "level": "🔴 Senior",
+      "explanation": "<p>SHAP (SHapley Additive exPlanations) на основе теории игр честно распределяет вклад каждого признака в конкретное предсказание, обеспечивая аддитивность: сумма SHAP-значений + базовое значение = предсказание модели.</p><pre><code class=\"language-python\">import shap\nexplainer = shap.TreeExplainer(model)  # быстрый для деревьев/бустинга\nshap_values = explainer.shap_values(X_test)\nshap.summary_plot(shap_values, X_test)          # глобальная важность\nshap.force_plot(explainer.expected_value,\n                 shap_values[0], X_test.iloc[0])  # объяснение одного примера\n</code></pre><ul><li><code>TreeExplainer</code> вычисляет точные SHAP-значения для деревьев за полиномиальное время (в отличие от общего Kernel SHAP, который экспоненциально дорог).</li><li>summary_plot показывает не только важность, но и направление влияния (высокие/низкие значения признака двигают предсказание вверх/вниз).</li><li>В отличие от feature_importance, SHAP корректно работает с коррелированными признаками и даёт объяснение на уровне отдельного объекта — критично для регуляторных требований (кредитный скоринг, медицина).</li></ul><p>Продакшн-нюанс: расчёт SHAP для больших датасетов дорог — используйте сэмплирование (<code>shap.sample</code>) или считайте только для проблемных/пограничных предсказаний, а не для всего трафика в реальном времени.</p>",
+      "links": [
+        {
+          "title": "SHAP Documentation",
+          "url": "https://shap.readthedocs.io/"
+        },
+        {
+          "title": "Lundberg & Lee (2017): A Unified Approach to Interpreting Model Predictions (arXiv)",
+          "url": "https://arxiv.org/abs/1705.07874"
+        },
+        {
+          "title": "SHAP GitHub repository",
+          "url": "https://github.com/shap/shap"
+        }
+      ]
+    },
+    {
+      "title": "Гиперпараметры бустинга и тюнинг с Optuna",
+      "level": "🔴 Senior",
+      "explanation": "<p>Ключевые гиперпараметры бустинга взаимозависимы: learning_rate ↔ n_estimators, max_depth/num_leaves ↔ переобучение, subsample/colsample ↔ регуляризация. Ручной перебор неэффективен — используют байесовскую оптимизацию (Optuna).</p><pre><code class=\"language-python\">import optuna\nfrom sklearn.model_selection import cross_val_score\n\ndef objective(trial):\n    params = {\n        'max_depth': trial.suggest_int('max_depth', 3, 10),\n        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),\n        'n_estimators': trial.suggest_int('n_estimators', 200, 2000),\n        'subsample': trial.suggest_float('subsample', 0.5, 1.0),\n        'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10, log=True),\n    }\n    model = xgb.XGBClassifier(**params, eval_metric='logloss')\n    return cross_val_score(model, X, y, cv=5, scoring='roc_auc').mean()\n\nstudy = optuna.create_study(direction='maximize')\nstudy.optimize(objective, n_trials=100, timeout=3600)\nprint(study.best_params)\n</code></pre><p>Совет: используйте <code>log=True</code> для параметров, меняющихся на порядки (learning_rate, reg_lambda), включайте pruning (<code>optuna.pruners.MedianPruner</code>) для остановки бесперспективных трайлов и всегда валидируйте лучшие параметры на отдельном hold-out, а не только на CV — Optuna может переподгонять под CV-фолды при большом числе испытаний.</p>",
+      "links": [
+        {
+          "title": "Optuna Documentation",
+          "url": "https://optuna.readthedocs.io/"
+        },
+        {
+          "title": "Akiba et al. (2019): Optuna paper (arXiv)",
+          "url": "https://arxiv.org/abs/1907.10902"
+        },
+        {
+          "title": "Optuna GitHub repository",
+          "url": "https://github.com/optuna/optuna"
+        }
+      ]
+    },
+    {
+      "title": "Стекинг и блендинг",
+      "level": "🔴 Senior",
+      "explanation": "<p>Стекинг обучает мета-модель на предсказаниях базовых моделей (например, XGBoost + LightGBM + логрегрессия), комбинируя их сильные стороны. Блендинг — упрощённый вариант: предсказания усредняются с весами, подобранными на holdout-выборке.</p><pre><code class=\"language-python\">from sklearn.ensemble import StackingClassifier\nfrom sklearn.linear_model import LogisticRegression\n\nestimators = [('xgb', xgb.XGBClassifier()), ('lgb', lgb.LGBMClassifier())]\nstack = StackingClassifier(\n    estimators=estimators,\n    final_estimator=LogisticRegression(),\n    cv=5  # важно: мета-фичи считаются на out-of-fold предсказаниях\n)\nstack.fit(X_train, y_train)\n</code></pre><ul><li>Критично использовать OOF (out-of-fold) предсказания базовых моделей для обучения мета-модели — иначе мета-модель переобучится на утечке (базовые модели \"видели\" эти же данные при обучении).</li><li>Стекинг даёт максимум на Kaggle-соревнованиях (+0.5-2% метрики), но в проде усложняет инфраструктуру, увеличивает latency и затраты на поддержку — используйте, только если прирост качества оправдывает сложность.</li></ul><p>Совет: перед стекингом убедитесь, что базовые модели разнообразны (разные алгоритмы/фичи) — усреднение похожих моделей почти не даёт прироста.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: StackingClassifier",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.StackingClassifier.html"
+        },
+        {
+          "title": "scikit-learn: Stacked generalization guide",
+          "url": "https://scikit-learn.org/stable/modules/ensemble.html#stacked-generalization"
+        },
+        {
+          "title": "Wikipedia: Ensemble learning (Stacking)",
+          "url": "https://en.wikipedia.org/wiki/Ensemble_learning"
+        }
+      ]
+    },
+    {
+      "title": "Когда бустинг лучше нейросетей (и наоборот)",
+      "level": "🔴 Senior",
+      "explanation": "<p>Градиентный бустинг на табличных данных (десятки-сотни признаков, тысячи-миллионы строк) почти всегда обыгрывает или сравним с нейросетями (MLP, TabNet, FT-Transformer), особенно на средних по размеру датасетах.</p><table><tr><th>Критерий</th><th>Бустинг (XGB/LGBM/CatBoost)</th><th>Нейросети</th></tr><tr><td>Табличные данные, &lt;1M строк</td><td>обычно лучше и быстрее в обучении</td><td>требует больше данных/тюнинга</td></tr><tr><td>Неструктурированные данные (изображения, текст, аудио)</td><td>требует ручного feature engineering</td><td>явное преимущество (CNN/Transformer)</td></tr><tr><td>Интерпретируемость</td><td>SHAP/feature importance из коробки</td><td>сложнее объяснить</td></tr><tr><td>Онлайн-дообучение / потоковые данные</td><td>сложнее (обычно переобучение с нуля)</td><td>проще (SGD-подобное дообучение)</td></tr><tr><td>Мультимодальные данные</td><td>плохо</td><td>естественно комбинируются</td></tr></table><pre><code class=\"language-python\"># Быстрый baseline на табличных данных — почти всегда начинайте отсюда\nimport lightgbm as lgb\nbaseline = lgb.LGBMClassifier(n_estimators=500).fit(X_train, y_train)\n</code></pre><p>Практический совет: на табличных задачах бустинг — почти всегда правильный baseline и часто финальное решение. Нейросети оправданы при очень больших данных, эмбеддингах категорий высокой кардинальности или при необходимости комбинировать табличные данные с текстом/изображениями в одной модели.</p>",
+      "links": [
+        {
+          "title": "Grinsztajn et al.: Why tree-based models still outperform deep learning on tabular data (arXiv)",
+          "url": "https://arxiv.org/abs/2207.08815"
+        },
+        {
+          "title": "XGBoost Documentation",
+          "url": "https://xgboost.readthedocs.io/"
+        },
+        {
+          "title": "PyTorch Documentation",
+          "url": "https://pytorch.org/docs/stable/index.html"
+        }
+      ]
+    },
+    {
+      "title": "Работа с несбалансированными классами в ансамблях",
+      "level": "🟡 Middle",
+      "explanation": "<p>При сильном дисбалансе классов (например, 1% фрода против 99% нормальных транзакций) деревья и бустинг склонны игнорировать миноритарный класс, оптимизируя общую точность.</p><ul><li><code>class_weight='balanced'</code> в RandomForest/DecisionTree — взвешивает классы обратно пропорционально частоте.</li><li><code>scale_pos_weight</code> в XGBoost — отношение negative/positive для бинарной классификации.</li><li>Oversampling миноритарного класса (SMOTE) или undersampling мажоритарного — применяется до обучения, но только на train-фолде, не на всём датасете (иначе утечка через дублирование в валидации).</li></ul><pre><code class=\"language-python\">neg, pos = (y_train == 0).sum(), (y_train == 1).sum()\nmodel = xgb.XGBClassifier(scale_pos_weight=neg / pos)\nmodel.fit(X_train, y_train)\n</code></pre><p>Важно: при дисбалансе accuracy — бесполезная метрика (модель, всегда предсказывающая мажоритарный класс, даст 99% accuracy). Используйте PR-AUC, F1, recall@precision или бизнес-метрики, и подбирайте порог классификации (threshold) отдельно под задачу, а не полагайтесь на 0.5 по умолчанию.</p>",
+      "links": [
+        {
+          "title": "scikit-learn: RandomForestClassifier (class_weight)",
+          "url": "https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html"
+        },
+        {
+          "title": "imbalanced-learn Documentation (SMOTE)",
+          "url": "https://imbalanced-learn.org/stable/"
+        },
+        {
+          "title": "XGBoost Parameters (scale_pos_weight)",
+          "url": "https://xgboost.readthedocs.io/en/stable/parameter.html"
+        },
+        {
+          "title": "scikit-learn: Precision-Recall and F-measures",
+          "url": "https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-and-f-measures"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что снижает Random Forest по сравнению с одиночным решающим деревом?",
+      "options": [
+        "Bias модели",
+        "Дисперсию (variance) предсказаний",
+        "Время инференса",
+        "Количество гиперпараметров"
+      ],
+      "answer": 1,
+      "explain": "Усреднение множества деревьев, обученных на бутстрэп-выборках, снижает variance — итоговая модель менее чувствительна к конкретной обучающей выборке."
+    },
+    {
+      "q": "В чём принципиальное отличие градиентного бустинга от бэггинга?",
+      "options": [
+        "Бустинг строит деревья параллельно, бэггинг — последовательно",
+        "Бустинг строит деревья последовательно, каждое исправляет ошибки предыдущих",
+        "Бустинг не использует деревья решений",
+        "Бэггинг требует learning_rate, а бустинг нет"
+      ],
+      "answer": 1,
+      "explain": "Бустинг — последовательный процесс: каждое новое дерево обучается на остатках/градиенте ошибки предыдущего ансамбля."
+    },
+    {
+      "q": "Чем LightGBM принципиально отличается от классического XGBoost по способу роста дерева?",
+      "options": [
+        "LightGBM растит дерево leaf-wise, выбирая лист с максимальным приростом",
+        "LightGBM не использует деревья вообще",
+        "LightGBM растит дерево строго по уровням (level-wise), как и XGBoost по умолчанию",
+        "LightGBM всегда строит только одно дерево"
+      ],
+      "answer": 0,
+      "explain": "Leaf-wise рост даёт более точные деревья при том же числе листьев, но требует контроля num_leaves во избежание переобучения."
+    },
+    {
+      "q": "Почему CatBoost часто предпочтителен на данных с высококардинальными категориальными признаками?",
+      "options": [
+        "Он требует ручного one-hot encoding перед обучением",
+        "Он использует ordered target encoding, снижающий утечку таргета",
+        "Он вообще не поддерживает категориальные признаки",
+        "Он работает только с числовыми признаками"
+      ],
+      "answer": 1,
+      "explain": "Ordered target encoding в CatBoost считает статистики по таргету только по 'предыдущим' объектам в случайной перестановке, что минимизирует leakage."
+    },
+    {
+      "q": "Какая ошибка приводит к утечке таргета при target encoding категориальных признаков?",
+      "options": [
+        "Использование KFold для расчёта средних по таргету",
+        "Расчёт средних по таргету на всей выборке сразу, без разбиения на фолды",
+        "Применение label encoding вместо target encoding",
+        "Использование CatBoost вместо XGBoost"
+      ],
+      "answer": 1,
+      "explain": "Если считать target encoding по всей выборке сразу, объект 'видит' информацию о своём же таргете через агрегат — это классическая утечка данных."
+    },
+    {
+      "q": "В чём главное преимущество SHAP перед стандартным feature_importance из бустинга?",
+      "options": [
+        "SHAP считается быстрее, чем feature_importance",
+        "SHAP даёт честное объяснение вклада признаков для отдельного предсказания и корректно работает с коррелированными фичами",
+        "SHAP не требует обученной модели",
+        "SHAP заменяет необходимость в кросс-валидации"
+      ],
+      "answer": 1,
+      "explain": "SHAP основан на теории игр (значения Шепли) и даёт аддитивное, теоретически обоснованное объяснение как глобально, так и для конкретного объекта."
+    },
+    {
+      "q": "Зачем в Optuna использовать log=True для параметра learning_rate?",
+      "options": [
+        "Это ускоряет обучение самой модели",
+        "Параметр меняется на порядки величины, и логарифмическая шкала эффективнее исследует пространство поиска",
+        "Это обязательный параметр в API Optuna",
+        "Без log=True Optuna не поддерживает float-параметры"
+      ],
+      "answer": 1,
+      "explain": "Для параметров вроде learning_rate или reg_lambda, которые могут меняться от 0.001 до 1, равномерный поиск неэффективен — логарифмическая шкала даёт более сбалансированное покрытие."
+    },
+    {
+      "q": "Что критично важно при стекинге моделей, чтобы избежать переобучения мета-модели?",
+      "options": [
+        "Использовать одинаковые базовые модели для разнообразия",
+        "Обучать мета-модель на out-of-fold (OOF) предсказаниях базовых моделей",
+        "Обучать базовые модели и мета-модель на одних и тех же данных без разбиения",
+        "Использовать только линейные модели в качестве базовых"
+      ],
+      "answer": 1,
+      "explain": "Если мета-модель обучается на предсказаниях базовых моделей на тех же данных, где они обучались, это приводит к утечке и переоценке качества стекинга."
+    },
+    {
+      "q": "На задачах с табличными данными среднего размера (тысячи-миллионы строк) какой подход обычно является лучшим baseline?",
+      "options": [
+        "Глубокая нейросеть с десятками слоёв",
+        "Градиентный бустинг (XGBoost/LightGBM/CatBoost)",
+        "K-Nearest Neighbors без масштабирования",
+        "Наивный байесовский классификатор"
+      ],
+      "answer": 1,
+      "explain": "На структурированных табличных данных бустинг стабильно превосходит или сравним с нейросетями, требуя меньше данных и тюнинга."
+    },
+    {
+      "q": "Почему accuracy — плохая метрика при сильном дисбалансе классов (например, 1% против 99%)?",
+      "options": [
+        "Accuracy вообще нельзя вычислить при дисбалансе",
+        "Модель, всегда предсказывающая мажоритарный класс, получит высокую accuracy, не выявляя ни одного случая миноритарного класса",
+        "Accuracy требует балансировки классов заранее",
+        "Accuracy применима только к регрессии"
+      ],
+      "answer": 1,
+      "explain": "При дисбалансе 99/1 тривиальная модель даёт 99% accuracy, но полностью бесполезна — нужны PR-AUC, F1, recall или бизнес-метрики."
+    }
+  ]
+}

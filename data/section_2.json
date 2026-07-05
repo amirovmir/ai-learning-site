@@ -1,0 +1,384 @@
+{
+  "phase": "Phase 1 — Python + Math + Data",
+  "section": "🧮 NumPy · Pandas · SQL",
+  "topics": [
+    {
+      "title": "ndarray и broadcasting",
+      "level": "🟢 Junior",
+      "explanation": "<p>Основа NumPy — <code>ndarray</code>: однородный многомерный массив с фиксированным типом и формой (<code>shape</code>). В отличие от списков Python, элементы хранятся в непрерывном блоке памяти, что даёт скорость и компактность.</p><ul><li><code>arr.shape</code>, <code>arr.dtype</code>, <code>arr.ndim</code> — базовые атрибуты, проверяйте их при отладке.</li><li><b>Broadcasting</b> — правило, по которому массивы разной формы участвуют в операциях без явного копирования данных.</li></ul><pre><code>import numpy as np\na = np.array([[1,2,3],[4,5,6]])  # shape (2,3)\nb = np.array([10,20,30])          # shape (3,)\nprint(a + b)  # b растягивается по строкам\n# [[11 22 33]\n#  [14 25 36]]</code></pre><p>Правило broadcasting: формы сравниваются справа налево, размерности должны совпадать либо одна из них равна 1.</p><p><b>Типичная ошибка:</b> смешивать <code>int</code> и <code>float</code> массивы и удивляться неявному приведению типов, либо получать <code>ValueError: operands could not be broadcast together</code> — проверяйте <code>shape</code> перед операцией.</p><p><b>Совет:</b> используйте <code>arr.reshape(-1, 1)</code> для явного превращения вектора в столбец при broadcasting.</p>",
+      "links": [
+        {
+          "title": "NumPy: ndarray docs",
+          "url": "https://numpy.org/doc/stable/reference/arrays.ndarray.html"
+        },
+        {
+          "title": "NumPy Broadcasting",
+          "url": "https://numpy.org/doc/stable/user/basics.broadcasting.html"
+        },
+        {
+          "title": "NumPy Quickstart",
+          "url": "https://numpy.org/doc/stable/user/quickstart.html"
+        }
+      ]
+    },
+    {
+      "title": "Векторизация вместо циклов",
+      "level": "🟢 Junior",
+      "explanation": "<p>Циклы <code>for</code> по NumPy-массивам — антипаттерн: каждая итерация в Python обходится дорого из-за интерпретатора. Векторизованные операции выполняются в скомпилированном C-коде.</p><pre><code>import numpy as np\nx = np.random.rand(1_000_000)\n\n# Плохо: ~0.3-0.5 сек\nresult = [v**2 + 1 for v in x]\n\n# Хорошо: ~0.005 сек\nresult = x**2 + 1</code></pre><p>Полезные инструменты вместо ручных циклов:</p><ul><li><code>np.where(cond, a, b)</code> — векторный if/else</li><li><code>np.select([cond1, cond2], [val1, val2], default=0)</code> — множественные условия</li><li><code>np.vectorize</code> — удобно, но НЕ быстрее цикла, это просто синтаксический сахар</li></ul><table><tr><th>Подход</th><th>Скорость</th></tr><tr><td>Python for-loop</td><td>1x (база)</td></tr><tr><td>np.vectorize</td><td>~1.2x</td></tr><tr><td>Векторизация NumPy</td><td>50-200x</td></tr></table><p><b>Продакшен-совет:</b> если векторизация невозможна (сложная логика с состоянием), используйте <code>numba</code> с <code>@njit</code> — часто даёт прирост как у C без переписывания на C.</p>",
+      "links": [
+        {
+          "title": "NumPy Performance Tips",
+          "url": "https://numpy.org/doc/stable/user/basics.performance.html"
+        },
+        {
+          "title": "np.where docs",
+          "url": "https://numpy.org/doc/stable/reference/generated/numpy.where.html"
+        },
+        {
+          "title": "Numba documentation",
+          "url": "https://numba.readthedocs.io/en/stable/"
+        }
+      ]
+    },
+    {
+      "title": "Индексация, срезы и булевы маски",
+      "level": "🟢 Junior",
+      "explanation": "<p>NumPy поддерживает несколько видов индексации, и путаница между ними — источник багов №1 у новичков.</p><ul><li><b>Базовая индексация</b> (срезы <code>a[1:3]</code>) возвращает <b>view</b> — изменение среза меняет исходный массив!</li><li><b>Fancy indexing</b> (список индексов <code>a[[0,2,4]]</code>) и <b>булевы маски</b> возвращают <b>copy</b>.</li></ul><pre><code>import numpy as np\na = np.arange(10)\nview = a[2:5]\nview[0] = 999\nprint(a)  # [0 1 999 3 4 5 6 7 8 9] -- изменился!\n\nmask = a > 5\nfiltered = a[mask]  # копия\nfiltered[0] = -1\nprint(a)  # исходный массив не изменился</code></pre><p>Комбинированная маска с логическими операторами требует скобок и побитовых операторов <code>&amp;</code>, <code>|</code>, а не <code>and</code>/<code>or</code>:</p><pre><code>a[(a > 2) &amp; (a < 8)]</code></pre><p><b>Типичная ошибка:</b> <code>ValueError: truth value of an array is ambiguous</code> — возникает при попытке использовать <code>and</code>/<code>or</code> на массивах.</p><p><b>Совет:</b> если нужна независимая копия — вызывайте <code>.copy()</code> явно, не полагайтесь на угадывание.</p>",
+      "links": [
+        {
+          "title": "NumPy Indexing",
+          "url": "https://numpy.org/doc/stable/user/basics.indexing.html"
+        },
+        {
+          "title": "NumPy Copies and Views",
+          "url": "https://numpy.org/doc/stable/user/basics.copies.html"
+        },
+        {
+          "title": "Pandas Boolean Indexing",
+          "url": "https://pandas.pydata.org/docs/user_guide/indexing.html#boolean-indexing"
+        }
+      ]
+    },
+    {
+      "title": "DataFrame и Series — основы Pandas",
+      "level": "🟢 Junior",
+      "explanation": "<p><code>Series</code> — одномерный массив с индексом, <code>DataFrame</code> — таблица из Series с общим индексом. Это рабочая лошадка для 90% задач EDA.</p><pre><code>import pandas as pd\ndf = pd.DataFrame({\n    'name': ['Alice', 'Bob', 'Carl'],\n    'age': [25, 32, 28],\n    'city': ['NY', 'LA', 'NY']\n})\ndf.head()\ndf.info()          # типы колонок, пропуски\ndf.describe()       # статистика по числовым колонкам\ndf['age'].mean()\ndf.loc[df['city'] == 'NY', 'name']   # label-based\ndf.iloc[0:2, 1:3]                     # position-based</code></pre><p><b>Ключевое правило:</b> используйте <code>.loc</code> для меток и условий, <code>.iloc</code> для позиций. Смешивание — источник <code>SettingWithCopyWarning</code>.</p><pre><code># Плохо (может не сработать или дать warning)\ndf[df.age > 25]['city'] = 'Unknown'\n\n# Хорошо\ndf.loc[df.age > 25, 'city'] = 'Unknown'</code></pre><p><b>Совет:</b> цепочка индексаций (<code>df[...][...] = ...</code>) — почти всегда баг. Всегда используйте один <code>.loc</code>.</p>",
+      "links": [
+        {
+          "title": "Pandas: 10 minutes to pandas",
+          "url": "https://pandas.pydata.org/docs/user_guide/10min.html"
+        },
+        {
+          "title": "Pandas DataFrame docs",
+          "url": "https://pandas.pydata.org/docs/reference/frame.html"
+        },
+        {
+          "title": "Pandas Indexing and Selecting Data",
+          "url": "https://pandas.pydata.org/docs/user_guide/indexing.html"
+        }
+      ]
+    },
+    {
+      "title": "Чтение и очистка данных",
+      "level": "🟢 Junior",
+      "explanation": "<p>Реальные данные почти никогда не бывают чистыми. Стандартный пайплайн: загрузка → профилирование → очистка.</p><pre><code>import pandas as pd\ndf = pd.read_csv('data.csv', dtype={'id': str}, parse_dates=['created_at'])\n\n# Профилирование\nprint(df.isna().sum())\nprint(df.duplicated().sum())\nprint(df.dtypes)\n\n# Очистка\ndf = df.drop_duplicates()\ndf['price'] = pd.to_numeric(df['price'], errors='coerce')\ndf['name'] = df['name'].str.strip().str.lower()\ndf = df[df['price'] > 0]  # фильтрация выбросов/невалидных значений</code></pre><ul><li><code>read_csv</code> с большими файлами — используйте <code>chunksize</code> или сразу <code>dtype</code>, чтобы не тратить память на автоопределение типов.</li><li><code>errors='coerce'</code> в <code>pd.to_numeric</code>/<code>pd.to_datetime</code> превращает мусор в <code>NaN</code> вместо падения — удобно для грязных данных.</li></ul><p><b>Типичная ошибка:</b> читать ID как <code>int</code>, теряя ведущие нули (например, почтовые индексы). Всегда явно указывайте <code>dtype=str</code> для идентификаторов.</p><p><b>Совет:</b> заведите функцию <code>profile_df(df)</code>, которая печатает shape, dtypes, na-счётчики и пример строк — экономит время на каждом новом датасете.</p>",
+      "links": [
+        {
+          "title": "Pandas IO Tools (read_csv)",
+          "url": "https://pandas.pydata.org/docs/user_guide/io.html"
+        },
+        {
+          "title": "Pandas Working with Missing Data",
+          "url": "https://pandas.pydata.org/docs/user_guide/missing_data.html"
+        },
+        {
+          "title": "Pandas Data Cleaning Guide",
+          "url": "https://pandas.pydata.org/docs/getting_started/intro_tutorials/07_reshape_table_layout.html"
+        }
+      ]
+    },
+    {
+      "title": "GroupBy, merge и pivot_table",
+      "level": "🟡 Middle",
+      "explanation": "<p>Это ядро аналитики в Pandas — аналог <code>GROUP BY</code> и <code>JOIN</code> в SQL.</p><pre><code>import pandas as pd\n\n# GroupBy + агрегация\nresult = df.groupby('category').agg(\n    total_sales=('sales', 'sum'),\n    avg_price=('price', 'mean'),\n    n_orders=('order_id', 'count')\n).reset_index()\n\n# Merge (аналог SQL JOIN)\nmerged = pd.merge(orders, customers, on='customer_id', how='left')\n\n# Pivot table (аналог сводной таблицы Excel)\npivot = df.pivot_table(\n    index='region', columns='month', values='sales', aggfunc='sum', fill_value=0\n)</code></pre><table><tr><th>Pandas</th><th>SQL</th></tr><tr><td>merge(how='left')</td><td>LEFT JOIN</td></tr><tr><td>groupby().agg()</td><td>GROUP BY + агрегаты</td></tr><tr><td>pivot_table</td><td>CASE WHEN + GROUP BY</td></tr></table><p><b>Типичная ошибка:</b> merge без проверки количества строк до/после — при дублях по ключу можно случайно размножить строки (fan-out). Проверяйте <code>len(merged)</code> и используйте <code>validate='one_to_many'</code> и подобные параметры <code>merge()</code>.</p><p><b>Совет:</b> для сложных агрегаций с несколькими группировками используйте именованную агрегацию (<code>total_sales=('sales','sum')</code>) — читается однозначно.</p>",
+      "links": [
+        {
+          "title": "Pandas GroupBy docs",
+          "url": "https://pandas.pydata.org/docs/user_guide/groupby.html"
+        },
+        {
+          "title": "Pandas Merge, join, concatenate",
+          "url": "https://pandas.pydata.org/docs/user_guide/merging.html"
+        },
+        {
+          "title": "Pandas Pivot tables",
+          "url": "https://pandas.pydata.org/docs/user_guide/reshaping.html"
+        }
+      ]
+    },
+    {
+      "title": "Работа с пропущенными значениями",
+      "level": "🟡 Middle",
+      "explanation": "<p>Пропуски (<code>NaN</code>, <code>None</code>, <code>NaT</code>) — не просто 'дырки', а сигнал о процессе сбора данных. Слепое <code>dropna()</code> может убить полезные данные.</p><pre><code>import pandas as pd\nimport numpy as np\n\ndf.isna().mean() * 100   # % пропусков по колонкам\n\n# Стратегии заполнения\ndf['age'] = df['age'].fillna(df['age'].median())\ndf['category'] = df['category'].fillna('unknown')\ndf['value'] = df.groupby('group')['value'].transform(\n    lambda s: s.fillna(s.mean())\n)\n\n# Интерполяция для временных рядов\ndf['temp'] = df['temp'].interpolate(method='linear')</code></pre><ul><li>Если пропусков &gt; 40-50% в колонке — часто разумнее удалить колонку, чем заполнять.</li><li>Для ML-моделей полезно добавить бинарный индикатор <code>is_missing</code> — сама пропущенность может быть предиктивным признаком.</li></ul><p><b>Типичная ошибка:</b> заполнять пропуски средним/медианой ПОСЛЕ train/test split неправильным образом — вычисляйте статистику только на train, иначе получите data leakage.</p><p><b>Совет:</b> документируйте, почему выбрана та или иная стратегия заполнения — это часть воспроизводимости эксперимента.</p>",
+      "links": [
+        {
+          "title": "Pandas Missing Data guide",
+          "url": "https://pandas.pydata.org/docs/user_guide/missing_data.html"
+        },
+        {
+          "title": "scikit-learn Imputation",
+          "url": "https://scikit-learn.org/stable/modules/impute.html"
+        },
+        {
+          "title": "Data Leakage — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)"
+        }
+      ]
+    },
+    {
+      "title": "Категориальные данные и dtype category",
+      "level": "🟡 Middle",
+      "explanation": "<p>Тип <code>category</code> в Pandas хранит уникальные значения один раз плюс массив кодов — экономит память и ускоряет операции на колонках с малым числом уникальных значений.</p><pre><code>import pandas as pd\ndf['city'] = df['city'].astype('category')\nprint(df.memory_usage(deep=True))\n\n# Упорядоченные категории (важно для ML и сортировки)\nsize_order = pd.CategoricalDtype(\n    categories=['S', 'M', 'L', 'XL'], ordered=True\n)\ndf['size'] = df['size'].astype(size_order)\ndf.sort_values('size')  # сортировка по смыслу, не по алфавиту\n\n# One-hot encoding для моделей\npd.get_dummies(df, columns=['city'], drop_first=True)</code></pre><p><b>Когда использовать:</b> колонка с cardinality &lt; 50% от общего числа строк — кандидат на <code>category</code>. На датасете 10 млн строк с 20 уникальными городами экономия памяти может быть 10x.</p><p><b>Типичная ошибка:</b> присваивать новое значение категориальной колонке, которого нет в списке категорий — получите <code>NaN</code> вместо ошибки. Используйте <code>.cat.add_categories()</code> перед присвоением.</p><p><b>Совет:</b> для деревьев (XGBoost/LightGBM) можно передавать category-колонки напрямую, не делая one-hot — модели поддерживают нативную категориальную обработку.</p>",
+      "links": [
+        {
+          "title": "Pandas Categorical data",
+          "url": "https://pandas.pydata.org/docs/user_guide/categorical.html"
+        },
+        {
+          "title": "pandas.get_dummies docs",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.get_dummies.html"
+        },
+        {
+          "title": "LightGBM categorical features",
+          "url": "https://lightgbm.readthedocs.io/en/latest/Advanced-Topics.html"
+        }
+      ]
+    },
+    {
+      "title": "Работа с датами и временными рядами",
+      "level": "🟡 Middle",
+      "explanation": "<p>Тип <code>datetime64</code> и класс <code>DatetimeIndex</code> открывают мощные операции: ресемплинг, скользящие окна, работу с временными зонами.</p><pre><code>import pandas as pd\ndf['ts'] = pd.to_datetime(df['ts'], utc=True)\ndf = df.set_index('ts')\n\n# Ресемплинг: агрегация по дням\ndaily = df['sales'].resample('D').sum()\n\n# Скользящее окно (rolling)\ndf['sales_ma7'] = df['sales'].rolling(window=7).mean()\n\n# Извлечение компонентов\ndf['dayofweek'] = df.index.dayofweek\ndf['is_weekend'] = df.index.dayofweek >= 5\n\n# Сдвиг для лагов (важно в time series ML)\ndf['sales_lag1'] = df['sales'].shift(1)</code></pre><p><b>Типичная ошибка №1:</b> смешивать timezone-aware и naive datetime — операции упадут с <code>TypeError</code>. Всегда явно указывайте <code>utc=True</code> при парсинге разнородных источников.</p><p><b>Типичная ошибка №2 (утечка данных):</b> использовать <code>rolling</code> или статистику, включающую будущие значения, при построении признаков для прогнозирования — всегда проверяйте, что окно смотрит только назад (<code>closed='left'</code> при необходимости).</p><p><b>Совет:</b> для нерегулярных временных рядов используйте <code>asfreq</code> перед resample, чтобы явно увидеть пропущенные периоды.</p>",
+      "links": [
+        {
+          "title": "Pandas Time series / date functionality",
+          "url": "https://pandas.pydata.org/docs/user_guide/timeseries.html"
+        },
+        {
+          "title": "Pandas Window functions (rolling)",
+          "url": "https://pandas.pydata.org/docs/user_guide/window.html"
+        },
+        {
+          "title": "Pandas resample docs",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.resample.html"
+        }
+      ]
+    },
+    {
+      "title": "SQL: JOIN и типы соединений",
+      "level": "🟡 Middle",
+      "explanation": "<p>ML/AI-инженер обязан свободно писать SQL — большинство фичей для моделей достаются из хранилищ данных через запросы, а не из CSV.</p><pre><code>SELECT o.order_id, c.name, o.amount\nFROM orders o\nINNER JOIN customers c ON o.customer_id = c.id\nWHERE o.created_at >= '2026-01-01';\n\n-- LEFT JOIN сохраняет все строки левой таблицы\nSELECT c.name, COUNT(o.order_id) AS n_orders\nFROM customers c\nLEFT JOIN orders o ON c.id = o.customer_id\nGROUP BY c.name;</code></pre><table><tr><th>JOIN</th><th>Поведение</th></tr><tr><td>INNER</td><td>только совпадающие строки</td></tr><tr><td>LEFT</td><td>все строки левой + NULL если нет пары</td></tr><tr><td>FULL OUTER</td><td>все строки обеих таблиц</td></tr><tr><td>CROSS</td><td>декартово произведение</td></tr></table><p><b>Типичная ошибка:</b> JOIN по колонке с дублями без понимания — количество строк в результате может неожиданно вырасти (fan-out), искажая суммы и средние. Всегда проверяйте <code>COUNT(*)</code> до и после.</p><p><b>Совет:</b> используйте <code>EXPLAIN ANALYZE</code>, чтобы понять, использует ли JOIN индекс — на больших таблицах разница может быть в 100x по времени.</p>",
+      "links": [
+        {
+          "title": "PostgreSQL JOIN docs",
+          "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+        },
+        {
+          "title": "SQL JOIN — Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Join_(SQL)"
+        },
+        {
+          "title": "Mode SQL Tutorial: Joins",
+          "url": "https://mode.com/sql-tutorial/sql-joins/"
+        }
+      ]
+    },
+    {
+      "title": "SQL: оконные функции и агрегации",
+      "level": "🔴 Senior",
+      "explanation": "<p>Оконные функции (<code>OVER (...)</code>) позволяют считать агрегаты без схлопывания строк — незаменимы для ранжирования, скользящих метрик, накопительных сумм.</p><pre><code>SELECT\n  user_id,\n  order_date,\n  amount,\n  SUM(amount) OVER (\n    PARTITION BY user_id ORDER BY order_date\n    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n  ) AS running_total,\n  RANK() OVER (PARTITION BY user_id ORDER BY amount DESC) AS rank_by_amount,\n  LAG(amount, 1) OVER (PARTITION BY user_id ORDER BY order_date) AS prev_amount\nFROM orders;</code></pre><ul><li><code>ROW_NUMBER()</code>, <code>RANK()</code>, <code>DENSE_RANK()</code> — различаются обработкой одинаковых значений.</li><li><code>LAG</code>/<code>LEAD</code> — доступ к соседним строкам без self-join, крайне полезно для построения фичей time-series прямо в БД.</li><li>CTE (<code>WITH ... AS (...)</code>) улучшают читаемость сложных запросов и позволяют переиспользовать промежуточные результаты.</li></ul><p><b>Типичная ошибка:</b> путать <code>WHERE</code> и <code>HAVING</code> с оконными функциями — оконные функции нельзя фильтровать в <code>WHERE</code> того же уровня запроса, нужен внешний <code>SELECT</code> или CTE с фильтром по alias.</p><p><b>Продакшен-совет:</b> оконные функции с большими <code>PARTITION BY</code> без индекса на колонке партиционирования могут быть узким местом — проверяйте план выполнения на объёмах, близких к боевым.</p>",
+      "links": [
+        {
+          "title": "PostgreSQL Window Functions",
+          "url": "https://www.postgresql.org/docs/current/tutorial-window.html"
+        },
+        {
+          "title": "PostgreSQL Window Functions Reference",
+          "url": "https://www.postgresql.org/docs/current/functions-window.html"
+        },
+        {
+          "title": "Mode SQL Tutorial: Window Functions",
+          "url": "https://mode.com/sql-tutorial/sql-window-functions/"
+        }
+      ]
+    },
+    {
+      "title": "Polars как альтернатива Pandas",
+      "level": "🔴 Senior",
+      "explanation": "<p>Polars — DataFrame-библиотека на Rust с ленивым выполнением запросов (query optimization) и нативным параллелизмом. На больших датасетах (10M+ строк) даёт 5-30x ускорение против Pandas.</p><pre><code>import polars as pl\n\n# Eager API — похож на Pandas\ndf = pl.read_csv('data.csv')\nresult = (\n    df.filter(pl.col('amount') > 0)\n      .group_by('category')\n      .agg(pl.col('amount').sum().alias('total'))\n)\n\n# Lazy API — оптимизатор строит план выполнения\nlazy_result = (\n    pl.scan_csv('big_data.csv')\n      .filter(pl.col('amount') > 0)\n      .group_by('category')\n      .agg(pl.col('amount').sum())\n      .collect()  # выполнение только здесь\n)</code></pre><table><tr><th>Критерий</th><th>Pandas</th><th>Polars</th></tr><tr><td>Параллелизм</td><td>однопоточный (в основном)</td><td>многопоточный из коробки</td></tr><tr><td>Ленивые вычисления</td><td>нет</td><td>да (lazy API)</td></tr><tr><td>Экосистема</td><td>огромная</td><td>растёт быстро</td></tr></table><p><b>Когда выбирать Polars:</b> ETL-пайплайны на десятках гигабайт, где Pandas упирается в память или скорость. Для небольших исследовательских ноутбуков Pandas часто удобнее из-за экосистемы (seaborn, statsmodels и т.д. заточены под него).</p><p><b>Совет:</b> Polars поддерживает выгрузку в Pandas (<code>.to_pandas()</code>) — можно использовать гибридный подход: тяжёлый ETL на Polars, финальный анализ на Pandas.</p>",
+      "links": [
+        {
+          "title": "Polars User Guide",
+          "url": "https://docs.pola.rs/"
+        },
+        {
+          "title": "Polars API Reference",
+          "url": "https://docs.pola.rs/api/python/stable/reference/index.html"
+        },
+        {
+          "title": "Polars vs Pandas",
+          "url": "https://docs.pola.rs/user-guide/migration/pandas/"
+        }
+      ]
+    },
+    {
+      "title": "Память и производительность Pandas",
+      "level": "🔴 Senior",
+      "explanation": "<p>Pandas по умолчанию не оптимизирован под память: <code>int64</code>/<code>float64</code> используются везде, строки хранятся как Python-объекты (накладные расходы на объект).</p><pre><code>import pandas as pd\n\ndf.info(memory_usage='deep')\n\n# Downcasting числовых типов\ndf['id'] = pd.to_numeric(df['id'], downcast='integer')\ndf['price'] = pd.to_numeric(df['price'], downcast='float')\n\n# category вместо object для строк с малым cardinality\nfor col in df.select_dtypes('object').columns:\n    if df[col].nunique() / len(df) < 0.5:\n        df[col] = df[col].astype('category')\n\n# Чтение по чанкам для файлов, не влезающих в память\nchunks = pd.read_csv('huge.csv', chunksize=500_000)\ntotal = sum(chunk['amount'].sum() for chunk in chunks)</code></pre><ul><li><code>df.apply(..., axis=1)</code> — почти всегда медленно (построчный Python-цикл под капотом). Замените на векторизацию или <code>df.apply</code> с <code>axis=0</code> где возможно.</li><li>Копирование DataFrame при каждой трансформации — следите за <code>copy=False</code> там, где это безопасно, и избегайте цепочек промежуточных копий.</li></ul><p><b>Типичная ошибка:</b> использовать <code>iterrows()</code> на больших датафреймах — это на порядки медленнее векторных операций и <code>itertuples()</code>.</p><p><b>Продакшен-совет:</b> профилируйте пайплайн через <code>%%timeit</code> и <code>memory_profiler</code> до оптимизации — интуиция часто обманывает насчёт того, где реально узкое место.</p>",
+      "links": [
+        {
+          "title": "Pandas Scaling to large datasets",
+          "url": "https://pandas.pydata.org/docs/user_guide/scale.html"
+        },
+        {
+          "title": "Pandas Enhancing performance",
+          "url": "https://pandas.pydata.org/docs/user_guide/enhancingperf.html"
+        },
+        {
+          "title": "memory_profiler docs",
+          "url": "https://pypi.org/project/memory-profiler/"
+        }
+      ]
+    },
+    {
+      "title": "Merge validation и data quality checks",
+      "level": "🔴 Senior",
+      "explanation": "<p>В продакшен-пайплайнах молчаливые ошибки при объединении данных (дубли, потерянные строки, неявные NULL) — источник самых коварных багов в ML-моделях: модель обучится, метрики будут выглядеть нормально, но на новых данных всё сломается.</p><pre><code>import pandas as pd\n\n# Явная валидация связей при merge\nmerged = pd.merge(\n    orders, customers, on='customer_id',\n    how='left', validate='many_to_one', indicator=True\n)\n\n# indicator=True добавляет колонку _merge для аудита\nprint(merged['_merge'].value_counts())\n# left_only  -- заказы без клиента (проблема данных!)\n# both       -- успешно смэтчено\n\nassert merged.shape[0] == orders.shape[0], 'merge вызвал fan-out!'\nassert merged['customer_id'].notna().all(), 'найдены записи без ключа'</code></pre><ul><li><code>validate</code> параметр (<code>'one_to_one'</code>, <code>'one_to_many'</code>, <code>'many_to_one'</code>, <code>'many_to_many'</code>) кидает исключение, если ожидание нарушено — ставьте его всегда в критичных пайплайнах.</li><li>Библиотеки типа <code>great_expectations</code> или <code>pandera</code> позволяют формализовать схему и правила качества данных как код, встроенный в CI/CD.</li></ul><p><b>Совет:</b> относитесь к контракту данных так же серьёзно, как к API-контракту между сервисами — пишите unit-тесты на форму и инварианты датафрейма, а не только на бизнес-логику модели.</p>",
+      "links": [
+        {
+          "title": "Pandas merge validate param",
+          "url": "https://pandas.pydata.org/docs/reference/api/pandas.merge.html"
+        },
+        {
+          "title": "Great Expectations docs",
+          "url": "https://docs.greatexpectations.io/docs/home/"
+        },
+        {
+          "title": "Pandera documentation",
+          "url": "https://pandera.readthedocs.io/en/stable/"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Что вернёт срез a[1:3] массива NumPy при последующем изменении элемента среза?",
+      "options": [
+        "Изменит только копию, исходный массив не затронут",
+        "Изменит исходный массив, так как базовая индексация возвращает view",
+        "Вызовет исключение ValueError",
+        "Поведение непредсказуемо и зависит от версии NumPy"
+      ],
+      "answer": 1,
+      "explain": "Базовая индексация срезами (в отличие от fancy indexing) возвращает view — общий буфер памяти с исходным массивом."
+    },
+    {
+      "q": "Почему векторизованные операции NumPy быстрее эквивалентного цикла for в Python?",
+      "options": [
+        "NumPy автоматически распараллеливает циклы на все ядра CPU",
+        "Операции выполняются в скомпилированном C-коде без накладных расходов интерпретатора Python на каждую итерацию",
+        "NumPy кеширует результаты предыдущих вычислений",
+        "Векторизация уменьшает точность вычислений, из-за чего быстрее"
+      ],
+      "answer": 1,
+      "explain": "Векторизация исполняется в низкоуровневом C-коде одним вызовом, минуя дорогостоящий цикл интерпретатора Python."
+    },
+    {
+      "q": "Какая конструкция правильная для комбинирования условий при булевой индексации Pandas/NumPy?",
+      "options": [
+        "df[(df.a > 1) and (df.b < 5)]",
+        "df[df.a > 1 or df.b < 5]",
+        "df[(df.a > 1) & (df.b < 5)]",
+        "df[df.a > 1, df.b < 5]"
+      ],
+      "answer": 2,
+      "explain": "Для массивов нужны побитовые операторы & и | с обязательными скобками вокруг каждого условия, а не and/or."
+    },
+    {
+      "q": "В чём разница между .loc и .iloc в Pandas?",
+      "options": [
+        ".loc всегда быстрее .iloc",
+        ".loc работает по меткам/условиям, .iloc — по позиционным индексам",
+        ".iloc используется только для Series, .loc только для DataFrame",
+        "Разницы нет, это синонимы"
+      ],
+      "answer": 1,
+      "explain": ".loc — доступ по меткам индекса и булевым условиям, .iloc — по числовым позициям, как в обычном списке."
+    },
+    {
+      "q": "Что произойдёт при merge двух таблиц, если ключ соединения содержит дубликаты в обеих таблицах?",
+      "options": [
+        "Pandas автоматически удалит дубликаты перед merge",
+        "Результат будет содержать декартово произведение совпадающих строк (fan-out), увеличивая число строк",
+        "Merge вызовет исключение по умолчанию",
+        "Дубликаты будут проигнорированы и останется только первая пара"
+      ],
+      "answer": 1,
+      "explain": "Дубли по ключу с обеих сторон приводят к размножению строк в результате — классическая причина искажённых агрегатов после merge."
+    },
+    {
+      "q": "Зачем использовать dtype 'category' в Pandas?",
+      "options": [
+        "Чтобы ускорить парсинг дат",
+        "Чтобы автоматически заполнить пропуски",
+        "Чтобы сократить память и ускорить операции на колонках с малым числом уникальных значений",
+        "Чтобы разрешить хранение чисел с плавающей точкой в текстовых колонках"
+      ],
+      "answer": 2,
+      "explain": "Category хранит уникальные значения один раз плюс коды, что экономит память и ускоряет группировки/сравнения при низкой кардинальности."
+    },
+    {
+      "q": "В чём опасность использования rolling-статистик при построении признаков для прогнозирования временных рядов?",
+      "options": [
+        "Rolling всегда работает медленнее, чем groupby",
+        "Окно может случайно захватывать будущие значения относительно момента прогноза, вызывая утечку данных (data leakage)",
+        "Rolling нельзя применять к DatetimeIndex",
+        "Rolling автоматически удаляет пропуски, искажая данные"
+      ],
+      "answer": 1,
+      "explain": "Если окно 'смотрит' в будущее относительно момента предсказания, модель на тесте покажет завышенные метрики, а в проде — провал."
+    },
+    {
+      "q": "Какой SQL JOIN сохранит все строки левой таблицы независимо от наличия совпадений в правой?",
+      "options": [
+        "INNER JOIN",
+        "CROSS JOIN",
+        "LEFT JOIN",
+        "Любой JOIN ведёт себя одинаково"
+      ],
+      "answer": 2,
+      "explain": "LEFT JOIN сохраняет все строки левой таблицы, подставляя NULL в колонки правой при отсутствии совпадения."
+    },
+    {
+      "q": "Почему нельзя напрямую фильтровать по результату оконной функции в предложении WHERE того же SELECT?",
+      "options": [
+        "Потому что оконные функции нельзя использовать вместе с ORDER BY",
+        "Потому что оконные функции вычисляются после WHERE в порядке выполнения запроса, поэтому нужен внешний SELECT/CTE с фильтром по alias",
+        "Потому что WHERE в SQL устарел и не поддерживается современными СУБД",
+        "Потому что оконные функции возвращают только один результат на всю таблицу"
+      ],
+      "answer": 1,
+      "explain": "WHERE выполняется раньше вычисления оконных функций, поэтому для фильтрации по их результату нужен внешний запрос или CTE."
+    },
+    {
+      "q": "В чём главное практическое преимущество Polars перед Pandas на больших датасетах?",
+      "options": [
+        "Polars поддерживает больше форматов файлов",
+        "Polars использует ленивое выполнение и многопоточность из коробки, что даёт значительное ускорение",
+        "Polars автоматически обучает ML-модели на данных",
+        "Polars не поддерживает работу с CSV, только с базами данных"
+      ],
+      "answer": 1,
+      "explain": "Polars построен на Rust с оптимизатором запросов (lazy API) и нативным параллелизмом, что даёт кратный прирост скорости на больших объёмах."
+    }
+  ]
+}
